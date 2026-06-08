@@ -1,4 +1,4 @@
-import { doc, getDoc, getDocs, setDoc, deleteDoc, collection, writeBatch } from 'firebase/firestore';
+import { doc, getDocs, setDoc, deleteDoc, collection } from 'firebase/firestore';
 import { db } from '../firebase';
 import { EggInventory, CustomItem, Customer, Transaction } from '../types';
 
@@ -7,121 +7,112 @@ const EGGS_KEY = 'sabbir_shop_eggs';
 const CUSTOM_ITEMS_KEY = 'sabbir_shop_custom_items';
 const CUSTOMERS_KEY = 'sabbir_shop_customers';
 const TRANSACTIONS_KEY = 'sabbir_shop_transactions';
+const PENDING_SYNC_KEY = 'sabbir_shop_pending_sync';
 
-// Initial Seed Data
+// Zero-Value Core Initialization Datasets (Requested 0-default)
 const defaultEggs: EggInventory[] = [
-  { type: 'desi', name: 'দেশি ডিম', stock: 450, unitPrice: 13.5 },
-  { type: 'broiler', name: 'ব্রয়লার ডিম', stock: 1200, unitPrice: 10.5 },
-  { type: 'duck', name: 'হাঁস ডিম', stock: 680, unitPrice: 15.0 },
-  { type: 'broken', name: 'ভাঙ্গা ডিম', stock: 42, unitPrice: 7.0 },
+  { type: 'desi', name: 'দেশি ডিম', stock: 0, unitPrice: 0 },
+  { type: 'broiler', name: 'ব্রয়লার ডিম', stock: 0, unitPrice: 0 },
+  { type: 'duck', name: 'হাঁস ডিম', stock: 0, unitPrice: 0 },
+  { type: 'broken', name: 'ভাঙ্গা ডিম', stock: 0, unitPrice: 0 },
 ];
 
-const defaultCustomItems: CustomItem[] = [
-  { id: '1', name: 'হাড়িভাঙ্গা আম', stock: 150, unit: 'কেজি', unitPrice: 110 },
-  { id: '2', name: 'লিচু (রাজশাহী)', stock: 35, unit: '১০০ পিস', unitPrice: 380 },
-  { id: '3', name: 'মেহেরপুরের কাঁঠাল', stock: 20, unit: 'পিস', unitPrice: 150 },
-  { id: '4', name: 'চায়না মাল্টা', stock: 80, unit: 'কেজি', unitPrice: 240 },
-];
+const defaultCustomItems: CustomItem[] = [];
+const defaultCustomers: Customer[] = [];
+const defaultTransactions: Transaction[] = [];
 
-const defaultCustomers: Customer[] = [
-  { id: 'c1', name: 'কামাল হোসেন', phone: '01712-345678', dueAmount: 1450, additionalNotes: 'বাজারের উত্তর কোণে বাড়ি' },
-  { id: 'c2', name: 'মো: আব্দুল মালেক', phone: '01823-998877', dueAmount: 600, additionalNotes: 'নিয়মিত ক্রেতা' },
-  { id: 'c3', name: 'মোছা: মরিয়ম বেগম', phone: '01911-223344', dueAmount: 0, additionalNotes: '' },
-  { id: 'c4', name: 'বুলবুল আহমেদ', phone: '01533-445566', dueAmount: 2450, additionalNotes: 'আড়তদার' },
-];
+// Interface for Offline Queue Operations
+interface PendingSync {
+  eggs: boolean;
+  customItems: { [id: string]: CustomItem | 'delete' };
+  customers: { [id: string]: Customer | 'delete' };
+  transactions: { [id: string]: Transaction | 'delete' };
+}
 
-const generatePastDate = (daysAgo: number, timeStr: string): string => {
-  const date = new Date();
-  date.setDate(date.getDate() - daysAgo);
-  return `${date.toISOString().split('T')[0]}T${timeStr}:00Z`;
+// Self-Executing Local Purge Block
+// Removes leftover mock/seed database representations to transition to pristine states safely.
+(() => {
+  try {
+    const localEggsData = localStorage.getItem(EGGS_KEY);
+    if (localEggsData) {
+      const parsed = JSON.parse(localEggsData);
+      if (Array.isArray(parsed) && parsed.some(e => e.type === 'desi' && e.stock === 450)) {
+        localStorage.removeItem(EGGS_KEY);
+      }
+    }
+    
+    const localCustData = localStorage.getItem(CUSTOMERS_KEY);
+    if (localCustData) {
+      const parsed = JSON.parse(localCustData);
+      if (Array.isArray(parsed) && parsed.some(c => c.id === 'c1')) {
+        localStorage.removeItem(CUSTOMERS_KEY);
+      }
+    }
+
+    const localItemsData = localStorage.getItem(CUSTOM_ITEMS_KEY);
+    if (localItemsData) {
+      const parsed = JSON.parse(localItemsData);
+      if (Array.isArray(parsed) && parsed.some(i => i.id === '1')) {
+        localStorage.removeItem(CUSTOM_ITEMS_KEY);
+      }
+    }
+
+    const localTxData = localStorage.getItem(TRANSACTIONS_KEY);
+    if (localTxData) {
+      const parsed = JSON.parse(localTxData);
+      if (Array.isArray(parsed) && parsed.some(t => t.id === 't1')) {
+        localStorage.removeItem(TRANSACTIONS_KEY);
+      }
+    }
+  } catch (err) {
+    console.warn('LocalStorage cleanup failed:', err);
+  }
+})();
+
+// Pending Sync Queue getters and savers
+const getPendingSync = (): PendingSync => {
+  const data = localStorage.getItem(PENDING_SYNC_KEY);
+  if (!data) {
+    return {
+      eggs: false,
+      customItems: {},
+      customers: {},
+      transactions: {}
+    };
+  }
+  return JSON.parse(data);
 };
 
-const defaultTransactions: Transaction[] = [
-  {
-    id: 't1',
-    type: 'sale',
-    date: generatePastDate(4, '09:30'),
-    totalAmount: 1120,
-    paidAmount: 1120,
-    dueAmount: 0,
-    customerName: 'নগদ খদ্দের',
-    items: [
-      { type: 'egg', itemId: 'broiler', itemName: 'ব্রয়লার ডিম', quantity: 80, unitPrice: 10.5, totalPrice: 840, unit: 'পিস' },
-      { type: 'custom', itemId: '1', itemName: 'হাড়িভাঙ্গা আম', quantity: 2, unitPrice: 110, totalPrice: 220, unit: 'কেজি' },
-      { type: 'egg', itemId: 'broken', itemName: 'ভাঙ্গা ডিম', quantity: 10, unitPrice: 6.0, totalPrice: 60, unit: 'পিস' }
-    ],
-    notes: 'সকালের বিক্রি'
-  },
-  {
-    id: 't2',
-    type: 'sale',
-    date: generatePastDate(3, '11:15'),
-    totalAmount: 2450,
-    paidAmount: 1000,
-    dueAmount: 1450,
-    customerId: 'c1',
-    customerName: 'কামাল হোসেন',
-    items: [
-      { type: 'egg', itemId: 'desi', itemName: 'দেশি ডিম', quantity: 100, unitPrice: 13.5, totalPrice: 1350, unit: 'পিস' },
-      { type: 'custom', itemId: '2', itemName: 'লিচু (রাজশাহী)', quantity: 2, unitPrice: 380, totalPrice: 760, unit: '১০০ পিস' },
-      { type: 'custom', itemId: '4', itemName: 'চায়না মাল্টা', quantity: 1, unitPrice: 240, totalPrice: 240, unit: 'কেজি' }
-    ],
-    notes: 'বাকি রাখা হলো, আগামী সপ্তাহে পরিশোধ করবে'
-  },
-  {
-    id: 't3',
-    type: 'sale',
-    date: generatePastDate(2, '15:20'),
-    totalAmount: 1200,
-    paidAmount: 600,
-    dueAmount: 600,
-    customerId: 'c2',
-    customerName: 'মো: আব্দুল মালেক',
-    items: [
-      { type: 'egg', itemId: 'duck', itemName: 'হাঁস ডিম', quantity: 80, unitPrice: 15.0, totalPrice: 1200, unit: 'পিস' }
-    ],
-    notes: 'অর্ধেক নগদ দিয়েছেন'
-  },
-  {
-    id: 't4',
-    type: 'payment',
-    date: generatePastDate(1, '10:00'),
-    totalAmount: 0,
-    paidAmount: 1000,
-    dueAmount: -1000,
-    customerId: 'c4',
-    customerName: 'বুলবুল আহমেদ',
-    notes: 'পূর্বের বাকির কিছু অংশ পরিশোধ'
-  },
-  {
-    id: 't5',
-    type: 'stock_add',
-    date: generatePastDate(1, '18:00'),
-    totalAmount: 0,
-    paidAmount: 0,
-    dueAmount: 0,
-    notes: 'মহাজন থেকে ৫০০ পিস হাঁসের ডিম স্টকে ঢোকানো হল',
-    items: [
-      { type: 'egg', itemId: 'duck', itemName: 'হাঁস ডিম', quantity: 500, unitPrice: 15.0, totalPrice: 0, unit: 'পিস' }
-    ]
-  },
-  {
-    id: 't6',
-    type: 'sale',
-    date: generatePastDate(0, '08:45'),
-    totalAmount: 955,
-    paidAmount: 955,
-    dueAmount: 0,
-    customerName: 'নগদ খদ্দের',
-    items: [
-      { type: 'egg', itemId: 'desi', itemName: 'দেশি ডিম', quantity: 30, unitPrice: 13.5, totalPrice: 405, unit: 'পিস' },
-      { type: 'custom', itemId: '1', itemName: 'হাড়িভাঙ্গা আম', quantity: 5, unitPrice: 110, totalPrice: 550, unit: 'কেজি' }
-    ],
-    notes: 'ক্যাশ বিক্রি'
-  }
-];
+const savePendingSync = (sync: PendingSync): void => {
+  localStorage.setItem(PENDING_SYNC_KEY, JSON.stringify(sync));
+};
 
-// Local Load helpers
+// Queue markers
+const markEggUnsynced = () => {
+  const sync = getPendingSync();
+  sync.eggs = true;
+  savePendingSync(sync);
+};
+
+const markCustomItemUnsynced = (id: string, item: CustomItem | 'delete') => {
+  const sync = getPendingSync();
+  sync.customItems[id] = item;
+  savePendingSync(sync);
+};
+
+const markCustomerUnsynced = (id: string, customer: Customer | 'delete') => {
+  const sync = getPendingSync();
+  sync.customers[id] = customer;
+  savePendingSync(sync);
+};
+
+const markTransactionUnsynced = (id: string, transaction: Transaction | 'delete') => {
+  const sync = getPendingSync();
+  sync.transactions[id] = transaction;
+  savePendingSync(sync);
+};
+
+// Local Retrieve and Load Operations
 export const getEggInventory = (): EggInventory[] => {
   const data = localStorage.getItem(EGGS_KEY);
   if (!data) {
@@ -133,10 +124,16 @@ export const getEggInventory = (): EggInventory[] => {
 
 export const saveEggInventory = (eggs: EggInventory[]): void => {
   localStorage.setItem(EGGS_KEY, JSON.stringify(eggs));
-  // Async background write
-  eggs.forEach(egg => {
-    setDoc(doc(db, 'eggs', egg.type), egg).catch(err => console.error('Cloud save failed for egg:', err));
-  });
+  if (navigator.onLine) {
+    eggs.forEach(egg => {
+      setDoc(doc(db, 'eggs', egg.type), egg).catch(err => {
+        console.warn('Egg cloud save failed - queued for offline:', err);
+        markEggUnsynced();
+      });
+    });
+  } else {
+    markEggUnsynced();
+  }
 };
 
 export const getCustomItems = (): CustomItem[] => {
@@ -150,9 +147,15 @@ export const getCustomItems = (): CustomItem[] => {
 
 export const saveCustomItems = (items: CustomItem[]): void => {
   localStorage.setItem(CUSTOM_ITEMS_KEY, JSON.stringify(items));
-  // Async update of docs
   items.forEach(item => {
-    setDoc(doc(db, 'customItems', item.id), item).catch(err => console.error('Cloud save failed for custom item:', err));
+    if (navigator.onLine) {
+      setDoc(doc(db, 'customItems', item.id), item).catch(err => {
+        console.warn('Custom item cloud save failed - queued for offline:', err);
+        markCustomItemUnsynced(item.id, item);
+      });
+    } else {
+      markCustomItemUnsynced(item.id, item);
+    }
   });
 };
 
@@ -167,9 +170,15 @@ export const getCustomers = (): Customer[] => {
 
 export const saveCustomers = (customers: Customer[]): void => {
   localStorage.setItem(CUSTOMERS_KEY, JSON.stringify(customers));
-  // Async background write
   customers.forEach(cust => {
-    setDoc(doc(db, 'customers', cust.id), cust).catch(err => console.error('Cloud save failed for customer:', err));
+    if (navigator.onLine) {
+      setDoc(doc(db, 'customers', cust.id), cust).catch(err => {
+        console.warn('Customer cloud save failed - queued for offline:', err);
+        markCustomerUnsynced(cust.id, cust);
+      });
+    } else {
+      markCustomerUnsynced(cust.id, cust);
+    }
   });
 };
 
@@ -184,33 +193,122 @@ export const getTransactions = (): Transaction[] => {
 
 export const saveTransactions = (transactions: Transaction[]): void => {
   localStorage.setItem(TRANSACTIONS_KEY, JSON.stringify(transactions));
-  // Async write
   transactions.forEach(tx => {
-    setDoc(doc(db, 'transactions', tx.id), tx).catch(err => console.error('Cloud save failed for transaction:', err));
+    if (navigator.onLine) {
+      setDoc(doc(db, 'transactions', tx.id), tx).catch(err => {
+        console.warn('Transaction cloud save failed - queued for offline:', err);
+        markTransactionUnsynced(tx.id, tx);
+      });
+    } else {
+      markTransactionUnsynced(tx.id, tx);
+    }
   });
 };
 
 // Document deletions helper
 export const deleteCustomItemFromCloud = (id: string) => {
-  deleteDoc(doc(db, 'customItems', id)).catch(err => console.warn('Cloud delete failed for custom item:', err));
+  if (navigator.onLine) {
+    deleteDoc(doc(db, 'customItems', id)).catch(err => {
+      console.warn('Custom item cloud delete failed - queued offline:', err);
+      markCustomItemUnsynced(id, 'delete');
+    });
+  } else {
+    markCustomItemUnsynced(id, 'delete');
+  }
 };
 
 export const deleteCustomerFromCloud = (id: string) => {
-  deleteDoc(doc(db, 'customers', id)).catch(err => console.warn('Cloud delete failed for customer:', err));
+  if (navigator.onLine) {
+    deleteDoc(doc(db, 'customers', id)).catch(err => {
+      console.warn('Customer cloud delete failed - queued offline:', err);
+      markCustomerUnsynced(id, 'delete');
+    });
+  } else {
+    markCustomerUnsynced(id, 'delete');
+  }
 };
 
 export const deleteTransactionFromCloud = (id: string) => {
-  deleteDoc(doc(db, 'transactions', id)).catch(err => console.warn('Cloud delete failed for transaction:', err));
+  if (navigator.onLine) {
+    deleteDoc(doc(db, 'transactions', id)).catch(err => {
+      console.warn('Transaction cloud delete failed - queued offline:', err);
+      markTransactionUnsynced(id, 'delete');
+    });
+  } else {
+    markTransactionUnsynced(id, 'delete');
+  }
+};
+
+// PUSH Pending offline changes to Cloud whenever connected
+export const pushPendingDataToCloud = async (): Promise<boolean> => {
+  if (!navigator.onLine) return false;
+  
+  const sync = getPendingSync();
+  let hasTransfers = false;
+  
+  try {
+    // 1. Sync Eggs
+    if (sync.eggs) {
+      const eggs = getEggInventory();
+      for (const egg of eggs) {
+        await setDoc(doc(db, 'eggs', egg.type), egg);
+      }
+      sync.eggs = false;
+      hasTransfers = true;
+    }
+    
+    // 2. Sync Custom Items
+    for (const [id, value] of Object.entries(sync.customItems)) {
+      if (value === 'delete') {
+        await deleteDoc(doc(db, 'customItems', id));
+      } else {
+        await setDoc(doc(db, 'customItems', id), value);
+      }
+      delete sync.customItems[id];
+      hasTransfers = true;
+    }
+    
+    // 3. Sync Customers
+    for (const [id, value] of Object.entries(sync.customers)) {
+      if (value === 'delete') {
+        await deleteDoc(doc(db, 'customers', id));
+      } else {
+        await setDoc(doc(db, 'customers', id), value);
+      }
+      delete sync.customers[id];
+      hasTransfers = true;
+    }
+    
+    // 4. Sync Transactions
+    for (const [id, value] of Object.entries(sync.transactions)) {
+      if (value === 'delete') {
+        await deleteDoc(doc(db, 'transactions', id));
+      } else {
+        await setDoc(doc(db, 'transactions', id), value);
+      }
+      delete sync.transactions[id];
+      hasTransfers = true;
+    }
+    
+    savePendingSync(sync);
+    return hasTransfers;
+  } catch (error) {
+    console.warn('Failed process during offline data push:', error);
+    return false;
+  }
 };
 
 // FULL Cloud sync task. Synchronizes with firestore and returns updated data
 export const syncAllDataWithCloud = async () => {
   try {
+    // Force retry pending offline transactions first to keep database synced
+    await pushPendingDataToCloud();
+
     // 1. Sync eggs
     const eggsSnapshot = await getDocs(collection(db, 'eggs'));
     let syncedEggs: EggInventory[] = [];
     if (eggsSnapshot.empty) {
-      // Seed Cloud
+      // Seed Cloud with zero elements
       for (const e of defaultEggs) {
         await setDoc(doc(db, 'eggs', e.type), e);
       }
@@ -219,20 +317,34 @@ export const syncAllDataWithCloud = async () => {
       eggsSnapshot.forEach(docSnap => {
         syncedEggs.push(docSnap.data() as EggInventory);
       });
+      
+      // If syncedEggs contains old default non-zero values, reset them
+      const hasOldMockEggStock = syncedEggs.some(e => 
+        (e.type === 'desi' && e.stock === 450) || 
+        (e.type === 'broiler' && e.stock === 1200) || 
+        (e.type === 'duck' && e.stock === 680) || 
+        (e.type === 'broken' && e.stock === 42)
+      );
+      if (hasOldMockEggStock) {
+        syncedEggs = defaultEggs;
+        for (const e of defaultEggs) {
+          await setDoc(doc(db, 'eggs', e.type), e);
+        }
+      }
     }
     localStorage.setItem(EGGS_KEY, JSON.stringify(syncedEggs));
 
     // 2. Sync customItems
     const itemsSnapshot = await getDocs(collection(db, 'customItems'));
     let syncedItems: CustomItem[] = [];
-    if (itemsSnapshot.empty) {
-      for (const item of defaultCustomItems) {
-        await setDoc(doc(db, 'customItems', item.id), item);
-      }
-      syncedItems = defaultCustomItems;
-    } else {
+    if (!itemsSnapshot.empty) {
       itemsSnapshot.forEach(docSnap => {
-        syncedItems.push(docSnap.data() as CustomItem);
+        const item = docSnap.data() as CustomItem;
+        if (!['1', '2', '3', '4'].includes(item.id)) {
+          syncedItems.push(item);
+        } else {
+          deleteDoc(doc(db, 'customItems', item.id)).catch(() => {});
+        }
       });
     }
     localStorage.setItem(CUSTOM_ITEMS_KEY, JSON.stringify(syncedItems));
@@ -240,14 +352,14 @@ export const syncAllDataWithCloud = async () => {
     // 3. Sync customers
     const custSnapshot = await getDocs(collection(db, 'customers'));
     let syncedCustomers: Customer[] = [];
-    if (custSnapshot.empty) {
-      for (const cust of defaultCustomers) {
-        await setDoc(doc(db, 'customers', cust.id), cust);
-      }
-      syncedCustomers = defaultCustomers;
-    } else {
+    if (!custSnapshot.empty) {
       custSnapshot.forEach(docSnap => {
-        syncedCustomers.push(docSnap.data() as Customer);
+        const cust = docSnap.data() as Customer;
+        if (!['c1', 'c2', 'c3', 'c4'].includes(cust.id)) {
+          syncedCustomers.push(cust);
+        } else {
+          deleteDoc(doc(db, 'customers', cust.id)).catch(() => {});
+        }
       });
     }
     localStorage.setItem(CUSTOMERS_KEY, JSON.stringify(syncedCustomers));
@@ -255,16 +367,15 @@ export const syncAllDataWithCloud = async () => {
     // 4. Sync transactions
     const txSnapshot = await getDocs(collection(db, 'transactions'));
     let syncedTx: Transaction[] = [];
-    if (txSnapshot.empty) {
-      for (const tx of defaultTransactions) {
-        await setDoc(doc(db, 'transactions', tx.id), tx);
-      }
-      syncedTx = defaultTransactions;
-    } else {
+    if (!txSnapshot.empty) {
       txSnapshot.forEach(docSnap => {
-        syncedTx.push(docSnap.data() as Transaction);
+        const tx = docSnap.data() as Transaction;
+        if (!['t1', 't2', 't3', 't4', 't5', 't6'].includes(tx.id)) {
+          syncedTx.push(tx);
+        } else {
+          deleteDoc(doc(db, 'transactions', tx.id)).catch(() => {});
+        }
       });
-      // Sort reverse by date
       syncedTx.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }
     localStorage.setItem(TRANSACTIONS_KEY, JSON.stringify(syncedTx));
@@ -276,7 +387,7 @@ export const syncAllDataWithCloud = async () => {
       transactions: syncedTx
     };
   } catch (error) {
-    console.warn('Real-time database loading failed/offline, using cache:', error);
+    console.warn('Real-time cloud database offline, falling back securely to local storage cache:', error);
     return null;
   }
 };

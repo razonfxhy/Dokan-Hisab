@@ -58,23 +58,62 @@ export default function App() {
     setTransactions(getTransactions());
 
     // 2. Perform background Cloud Sync with Firestore
-    setCloudStatus('syncing');
-    syncAllDataWithCloud()
-      .then(synced => {
-        if (synced) {
-          setEggs(synced.eggs);
-          setCustomItems(synced.customItems);
-          setCustomers(synced.customers);
-          setTransactions(synced.transactions);
-          setCloudStatus('synced');
-        } else {
+    if (navigator.onLine) {
+      setCloudStatus('syncing');
+      syncAllDataWithCloud()
+        .then(synced => {
+          if (synced) {
+            setEggs(synced.eggs);
+            setCustomItems(synced.customItems);
+            setCustomers(synced.customers);
+            setTransactions(synced.transactions);
+            setCloudStatus('synced');
+          } else {
+            setCloudStatus('failed');
+          }
+        })
+        .catch(err => {
+          console.warn('Background sync failed on initial startup:', err);
           setCloudStatus('failed');
-        }
-      })
-      .catch(err => {
-        console.warn('Background sync failed on initial startup:', err);
-        setCloudStatus('failed');
-      });
+        });
+    } else {
+      setCloudStatus('failed');
+    }
+
+    // 3. Network Events Listeners for Offline/Online Syncing
+    const handleWorkingOnline = () => {
+      console.log('Online event detected. Pushing offline records to Cloud...');
+      setCloudStatus('syncing');
+      syncAllDataWithCloud()
+        .then(synced => {
+          if (synced) {
+            setEggs(synced.eggs);
+            setCustomItems(synced.customItems);
+            setCustomers(synced.customers);
+            setTransactions(synced.transactions);
+            setCloudStatus('synced');
+          } else {
+            setCloudStatus('failed');
+          }
+        })
+        .catch(err => {
+          console.warn('Background sync on network restoration failed:', err);
+          setCloudStatus('failed');
+        });
+    };
+
+    const handleWorkingOffline = () => {
+      console.log('Offline event detected. Continuing in local-first storage mode.');
+      setCloudStatus('failed');
+    };
+
+    window.addEventListener('online', handleWorkingOnline);
+    window.addEventListener('offline', handleWorkingOffline);
+
+    return () => {
+      window.removeEventListener('online', handleWorkingOnline);
+      window.removeEventListener('offline', handleWorkingOffline);
+    };
   }, []);
 
   // Sync state helpers
