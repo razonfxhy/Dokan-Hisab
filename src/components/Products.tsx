@@ -63,6 +63,7 @@ export default function Products({
       return {
         ...eggItem,
         stock: eggItem.stock + additionalStock,
+        prevUnitPrice: newPrice !== eggItem.unitPrice ? eggItem.unitPrice : eggItem.prevUnitPrice,
         unitPrice: newPrice
       };
     });
@@ -201,6 +202,21 @@ export default function Products({
     onUpdateCustomAll(updatedItems);
     setAddCustomQty(prev => ({ ...prev, [itemId]: '' }));
     alert('পণ্য মজুদ সফলভাবে রিফিল করা হয়েছে!');
+  };
+
+  // Update dynamic custom selling rates with revaluation tracking
+  const handleUpdateCustomPrice = (itemId: string, newRate: number) => {
+    const updatedItems = customItems.map(item => {
+      if (item.id === itemId) {
+        return {
+          ...item,
+          prevUnitPrice: item.unitPrice,
+          unitPrice: newRate
+        };
+      }
+      return item;
+    });
+    onUpdateCustomAll(updatedItems);
   };
 
   return (
@@ -385,8 +401,33 @@ export default function Products({
                     <td className="py-3 px-4 font-bold text-natural-dark text-left">
                       {item.name}
                     </td>
-                    <td className="py-3 px-4 text-right font-mono text-natural-accent font-bold">
-                      {formatPrice(item.unitPrice)} <span className="text-[10px] text-natural-text/60 font-semibold font-sans">/ {item.unit}</span>
+                    <td className="py-3 px-4 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <input
+                          type="number"
+                          step="0.1"
+                          placeholder={item.unitPrice.toString()}
+                          defaultValue={item.unitPrice}
+                          onBlur={(e) => {
+                            const newP = parseFloat(e.target.value);
+                            if (!isNaN(newP) && newP !== item.unitPrice) {
+                              handleUpdateCustomPrice(item.id, newP);
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              const target = e.target as HTMLInputElement;
+                              const newP = parseFloat(target.value);
+                              if (!isNaN(newP) && newP !== item.unitPrice) {
+                                handleUpdateCustomPrice(item.id, newP);
+                                target.blur();
+                              }
+                            }
+                          }}
+                          className="w-16 bg-[#FDFBF7] border border-natural-border rounded-lg p-1 px-1.5 text-right text-xs font-mono font-bold text-natural-dark focus:ring-1 focus:ring-natural-accent focus:outline-none"
+                        />
+                        <span className="text-[10px] text-natural-text/60 font-semibold font-sans">/ {item.unit}</span>
+                      </div>
                     </td>
                     <td className="py-3 px-4 text-right border-collapse">
                       <span className={`inline-block px-2.5 py-1 rounded-md text-xs font-bold font-mono border ${item.stock <= 15 ? 'bg-red-50 text-red-700 border-red-200' : 'bg-natural-light text-natural-dark border-natural-border/40'}`}>
@@ -432,6 +473,120 @@ export default function Products({
             </table>
           </div>
         )}
+      </div>
+
+      {/* Revaluation Profit / Loss tracking Dashboard */}
+      <div id="product-revaluation-card" className="bg-natural-header rounded-2xl p-5 shadow-sm border border-natural-border text-left space-y-4">
+        <div className="border-b border-natural-border/60 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="text-emerald-700 font-bold text-lg select-none">📊</span>
+            <div>
+              <h3 className="font-bold text-natural-dark text-base">৪. দর পরিবর্তনের লাভ-ক্ষতি খাতা (Inventory Revaluation Register)</h3>
+              <p className="text-[10px] text-natural-text/65 mt-0.5">গুদামে বিদ্যমান বা অবশিষ্ট ডিম ও অন্যান্য ফসলের পুরনো দর পরিবর্তনের কারণে আনুমানিক লাভ বা ক্ষতি শিট।</p>
+            </div>
+          </div>
+          <span className="text-[10px] bg-emerald-50 text-emerald-850 px-2 py-0.5 rounded font-bold border border-emerald-200">লাইভ রেভ্যালুয়েশন</span>
+        </div>
+
+        {(() => {
+          const revaluedEggs = eggs
+            .filter(e => e.prevUnitPrice !== undefined && e.prevUnitPrice !== e.unitPrice)
+            .map(e => {
+              const diff = e.unitPrice - (e.prevUnitPrice || 0);
+              const totalChange = diff * e.stock;
+              return {
+                id: e.type,
+                name: `${e.name} ডিম`,
+                oldPrice: e.prevUnitPrice || 0,
+                newPrice: e.unitPrice,
+                stock: e.stock,
+                diff,
+                totalChange,
+                unit: 'পিস'
+              };
+            });
+
+          const revaluedCustoms = customItems
+            .filter(c => c.prevUnitPrice !== undefined && c.prevUnitPrice !== c.unitPrice)
+            .map(c => {
+              const diff = c.unitPrice - (c.prevUnitPrice || 0);
+              const totalChange = diff * c.stock;
+              return {
+                id: c.id,
+                name: c.name,
+                oldPrice: c.prevUnitPrice || 0,
+                newPrice: c.unitPrice,
+                stock: c.stock,
+                diff,
+                totalChange,
+                unit: c.unit
+              };
+            });
+
+          const allRevalued = [...revaluedEggs, ...revaluedCustoms];
+          const totalNetProfitLoss = allRevalued.reduce((sum, item) => sum + item.totalChange, 0);
+
+          if (allRevalued.length === 0) {
+            return (
+              <div className="text-center py-8 text-natural-text/50 text-xs font-semibold">
+                কোনো ডিম বা মৌসুমী পণ্যের বাজারদর এখনও পুনঃনির্ধারণ করা হয়নি। রেট পরিবর্তন করলে এখানকার লাভ-ক্ষতি গণনা ও মূল্য সমন্বয় সচল হবে।
+              </div>
+            );
+          }
+
+          return (
+            <div className="space-y-4">
+              <div className="overflow-x-auto rounded-xl border border-natural-border/50">
+                <table className="w-full text-left text-xs divide-y divide-natural-border/30">
+                  <thead>
+                    <tr className="text-natural-text/65 uppercase bg-natural-light/35 font-semibold">
+                      <th className="py-2.5 px-3">পণ্যের নাম</th>
+                      <th className="py-2.5 px-3 text-right">পুরনো দর</th>
+                      <th className="py-2.5 px-3 text-right">নতুন বিক্রয় দর</th>
+                      <th className="py-2.5 px-3 text-center">বাজার রেটের ব্যবধান</th>
+                      <th className="py-2.5 px-3 text-right">অবশিষ্ট মজুদ সংখ্যা</th>
+                      <th className="py-2.5 px-3 text-right">অনুমিত লাভ বা ক্ষতি</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-natural-border/30 bg-natural-header">
+                    {allRevalued.map(item => (
+                      <tr key={item.id} className="hover:bg-natural-light/25 font-bold transition-colors">
+                        <td className="py-2.5 px-3 text-natural-dark font-bold">{item.name}</td>
+                        <td className="py-2.5 px-3 text-right font-mono text-natural-text/75">{formatPrice(item.oldPrice)}</td>
+                        <td className="py-2.5 px-3 text-right font-mono text-natural-dark font-bold">{formatPrice(item.newPrice)}</td>
+                        <td className="py-2.5 px-3 text-center">
+                          <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold font-mono ${item.diff > 0 ? 'bg-emerald-55 text-emerald-850' : 'bg-rose-55 text-rose-850'}`}>
+                            {item.diff > 0 ? '+' : ''}{item.diff.toFixed(1)}/পিস
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-mono text-natural-dark">
+                          {formatNumberBengali(item.stock)} {item.unit}
+                        </td>
+                        <td className={`py-2.5 px-3 text-right font-mono font-extrabold ${item.totalChange >= 0 ? 'text-emerald-700' : 'text-red-750'}`}>
+                          {item.totalChange >= 0 ? 'লাভ: +' : 'ক্ষতি: '}{formatPrice(Math.abs(item.totalChange))}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Net aggregated box */}
+              <div className={`p-4 rounded-xl border flex flex-col md:flex-row items-center justify-between gap-3 ${totalNetProfitLoss >= 0 ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950' : 'bg-rose-50/70 border-rose-200 text-rose-950'}`}>
+                <div className="text-center md:text-left">
+                  <p className="text-xs font-bold font-sans">বাজারদর তারতম্যের কারণে অবশিষ্ট গুদাম রেভ্যালুয়েশন:</p>
+                  <p className="text-[10px] text-natural-text/70 mt-1">পুরনো দরে কেনা বা মজুদকৃত ডিমের নতুন দর নির্ধারণের ফলে মোট পুঁজির লাইভ লাভ বা লোকসান হিসাব।</p>
+                </div>
+                <div className="text-center md:text-right font-sans min-w-[200px]">
+                  <p className="text-[10px] font-bold text-natural-text/60">নিট সমন্বিত সমন্বয় রেট</p>
+                  <p className={`text-base font-extrabold font-mono mt-1 ${totalNetProfitLoss >= 0 ? 'text-emerald-700 font-bold' : 'text-red-700'}`}>
+                    {totalNetProfitLoss >= 0 ? 'নিট লাভ: +' : 'নিট লোকসান: '}{formatPrice(Math.abs(totalNetProfitLoss))}
+                  </p>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </div>
     </div>
   );

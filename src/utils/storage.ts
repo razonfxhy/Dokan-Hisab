@@ -445,3 +445,25 @@ export const purgeAllDbToZero = async (): Promise<boolean> => {
   }
 };
 
+export interface ShopSettings {
+  name: string;
+  address: string;
+}
+
+export const getShopSettings = (): ShopSettings => {
+  const data = localStorage.getItem('sabbir_shop_settings');
+  if (!data) {
+    return { name: 'সাব্বির পুষ্টি দোকান', address: 'হাজীগঞ্জ বাজার, চাঁদপুর' };
+  }
+  try {
+    return JSON.parse(data);
+  } catch (e) {
+    return { name: 'সাব্বির পুষ্টি দোকান', address: 'হাজীগঞ্জ বাজার, চাঁদপুর' };
+  }
+};
+
+export const saveShopSettings = (settings: ShopSettings): void => {
+  localStorage.setItem('sabbir_shop_settings', JSON.stringify(settings));
+};
+
+

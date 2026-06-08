@@ -24,6 +24,7 @@ interface TransactionsProps {
   onDeleteTransaction: (id: string) => void;
   onEditTransaction: (oldTx: Transaction, updatedTx: Transaction) => void;
   customers: Customer[];
+  selectedDateFilter?: string;
 }
 
 export default function Transactions({
@@ -32,7 +33,8 @@ export default function Transactions({
   selectedTransaction,
   onDeleteTransaction,
   onEditTransaction,
-  customers
+  customers,
+  selectedDateFilter = ''
 }: TransactionsProps) {
   // Filters
   const [filterType, setFilterType] = useState<'all' | 'sale' | 'payment' | 'stock_add'>('all');
@@ -101,6 +103,11 @@ export default function Transactions({
   // Filter Transactions
   const filteredTransactions = transactions
     .filter(tx => {
+      // Global selected date filter
+      if (selectedDateFilter && !tx.date.startsWith(selectedDateFilter)) {
+        return false;
+      }
+
       // Type filter
       if (filterType !== 'all' && tx.type !== filterType) return false;
       

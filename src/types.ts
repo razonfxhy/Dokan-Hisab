@@ -5,6 +5,7 @@ export interface EggInventory {
   name: string; // "দেশি", "ব্রয়লার", "হাঁস", "ভাঙ্গা"
   stock: number; // in pieces
   unitPrice: number; // current selling price per egg
+  prevUnitPrice?: number; // Previous price for profit/loss revaluation tracking
 }
 
 export interface CustomItem {
@@ -13,6 +14,7 @@ export interface CustomItem {
   stock: number; // quantity in stock
   unit: string; // e.g., "পিস", "কেজি", "হালি", "শত"
   unitPrice: number; // rate per unit
+  prevUnitPrice?: number; // Previous price for profit/loss revaluation tracking
 }
 
 export interface Customer {
@@ -46,4 +48,7 @@ export interface Transaction {
   customerName?: string; // snapshot of customer name for logs
   items?: TransactionItem[]; // list of items sold (for 'sale' type)
   notes?: string;
+  discount?: number; // Optional discount given during sale
+  retailCustomerName?: string; // Optional temporary customer name
+  retailCustomerPhone?: string; // Optional temporary customer phone
 }

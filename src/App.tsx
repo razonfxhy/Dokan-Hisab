@@ -12,7 +12,9 @@ import {
   deleteCustomerFromCloud,
   deleteCustomItemFromCloud,
   deleteTransactionFromCloud,
-  purgeAllDbToZero
+  purgeAllDbToZero,
+  getShopSettings,
+  saveShopSettings
 } from './utils/storage';
 import { EggInventory, CustomItem, Customer, Transaction } from './types';
 import Dashboard from './components/Dashboard';
@@ -26,14 +28,16 @@ import {
   Layers, 
   Users, 
   FileText, 
-  Calendar,
+  Calendar as CalendarIcon,
   Layers2,
   Store,
   MapPin,
   TrendingDown,
   Cloud,
   CloudLightning,
-  CloudOff
+  CloudOff,
+  Settings,
+  X
 } from 'lucide-react';
 
 export default function App() {
@@ -46,6 +50,38 @@ export default function App() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [cloudStatus, setCloudStatus] = useState<'syncing' | 'synced' | 'failed'>('synced');
+
+  // Shop Settings and global Date Filter
+  const [shopSettings, setShopSettings] = useState(() => getShopSettings());
+  const [selectedDateFilter, setSelectedDateFilter] = useState<string>('');
+
+  const [showShopSettingsModal, setShowShopSettingsModal] = useState(false);
+  const [tempShopName, setTempShopName] = useState(shopSettings.name);
+  const [tempShopAddress, setTempShopAddress] = useState(shopSettings.address);
+
+  useEffect(() => {
+    setTempShopName(shopSettings.name);
+    setTempShopAddress(shopSettings.address);
+  }, [shopSettings]);
+
+  const formatDateBangla = (dateStr: string) => {
+    if (!dateStr) return '';
+    try {
+      const parts = dateStr.split('-');
+      if (parts.length === 3) {
+        const engDigits = '0123456789';
+        const benDigits = '০১২৩৪৫৬৭৮৯';
+        const formatted = `${parts[2]}-${parts[1]}-${parts[0]}`;
+        return formatted.split('').map(char => {
+          const idx = engDigits.indexOf(char);
+          return idx !== -1 ? benDigits[idx] : char;
+        }).join('');
+      }
+      return dateStr;
+    } catch {
+      return dateStr;
+    }
+  };
 
   // Selected receipt state (global or linked)
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
@@ -315,11 +351,20 @@ export default function App() {
               <Store className="w-5.5 h-5.5" />
             </div>
             <div className="text-left">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-lg md:text-xl font-extrabold text-natural-dark tracking-tight leading-none">
-                  সাব্বির পুষ্টি দোকান
+                  {shopSettings.name}
                 </h1>
                 
+                <button
+                  type="button"
+                  onClick={() => setShowShopSettingsModal(true)}
+                  className="p-1 text-[#A69B84] hover:text-natural-accent hover:bg-natural-light/50 rounded transition active:scale-95 cursor-pointer"
+                  title="দোকানের নাম ও ঠিকানা পরিবর্তন"
+                >
+                  <Settings className="w-3.5 h-3.5" />
+                </button>
+
                 {/* Cloud Connection Badge */}
                 {cloudStatus === 'syncing' && (
                   <span className="inline-flex items-center gap-0.5 bg-[#FFFBEB] text-[#D97706] text-[9px] px-1.5 py-0.5 rounded-md border border-[#FCD34D] animate-pulse font-bold">
@@ -342,7 +387,7 @@ export default function App() {
               </div>
               <p className="text-[11px] text-[#A69B84] font-bold mt-1 tracking-wide flex items-center gap-0.5">
                 <MapPin className="w-3 h-3 text-natural-accent shrink-0" />
-                সরাসরি ডিম ও মৌসুমি পণ্যের খাতা
+                {shopSettings.address}
               </p>
             </div>
           </div>
@@ -413,6 +458,43 @@ export default function App() {
         </div>
       </header>
 
+      {/* Global Date Filter Bar */}
+      <div className="bg-[#FAF6EC] border-b border-natural-border px-4 py-2.5">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2">
+            <CalendarIcon className="w-4 h-4 text-natural-accent" />
+            <span className="font-semibold text-natural-dark">
+              নির্দিষ্ট দিনের হিসাবপত্র ফিল্টার করুন:
+            </span>
+            {selectedDateFilter ? (
+              <span className="bg-natural-accent text-[#FDFBF7] px-2.5 py-0.5 rounded-full font-bold">
+                {formatDateBangla(selectedDateFilter)} এর তথ্য প্রদর্শিত হচ্ছে
+              </span>
+            ) : (
+              <span className="bg-[#EAE4D2] text-[#2D3319] px-2.5 py-0.5 rounded-full font-bold">
+                আজকের দিনের চলমান হিসাব (কোনো নির্দিষ্ট ফিল্টার নেই)
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={selectedDateFilter}
+              onChange={(e) => setSelectedDateFilter(e.target.value)}
+              className="bg-white border border-[#CDA681]/40 rounded-lg px-2.5 py-1 text-natural-dark font-medium focus:outline-none focus:ring-1 focus:ring-natural-accent outline-none font-mono"
+            />
+            {selectedDateFilter && (
+              <button
+                onClick={() => setSelectedDateFilter('')}
+                className="bg-red-50 hover:bg-red-150 text-red-700 font-bold px-2 py-1 rounded-lg border border-red-200 transition cursor-pointer active:scale-95 text-[10px]"
+              >
+                ফিল্টার মুছুন
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Main Container Content */}
       <main className="flex-grow w-full max-w-7xl mx-auto px-4 py-6 md:py-8">
         
@@ -426,6 +508,8 @@ export default function App() {
             onNavigate={setActiveView}
             onViewTransaction={handleViewTransactionReceipt}
             onFactoryReset={handleFactoryReset}
+            selectedDateFilter={selectedDateFilter}
+            shopSettings={shopSettings}
           />
         )}
 
@@ -474,6 +558,7 @@ export default function App() {
             onDeleteTransaction={handleDeleteTransaction}
             onEditTransaction={handleEditTransaction}
             customers={customers}
+            selectedDateFilter={selectedDateFilter}
           />
         )}
       </main>
@@ -481,7 +566,7 @@ export default function App() {
       {/* Humble Aesthetic Footing Credits */}
       <footer className="bg-natural-header border-t border-natural-border py-6 px-4 text-center mt-12 text-xs text-natural-text/60 font-semibold" id="shop-footer">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p>© {new Date().getFullYear()} সাব্বির পুষ্টি দোকান — সর্বস্বত্ব সংরক্ষিত।</p>
+          <p>© {new Date().getFullYear()} {shopSettings.name} — সর্বস্বত্ব সংরক্ষিত।</p>
           <div className="flex gap-4 text-natural-text/50">
             <span>৪ ক্যাটাগরি ডিম ট্র্যাকার</span>
             <span>•</span>
@@ -491,6 +576,75 @@ export default function App() {
           </div>
         </div>
       </footer>
+
+      {/* Shop Profile Settings Modal */}
+      {showShopSettingsModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-natural-bg rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-natural-border space-y-4 text-left">
+            <div className="flex justify-between items-center border-b border-natural-border/60 pb-3">
+              <h3 className="font-bold text-natural-dark text-lg text-[#8B5E3C]">দোকানের তথ্য পরিবর্তন করুন</h3>
+              <button 
+                onClick={() => setShowShopSettingsModal(false)}
+                className="text-natural-text/60 hover:text-natural-dark text-xl font-bold p-1 leading-none cursor-pointer"
+              >
+                ×
+              </button>
+            </div>
+
+            <form 
+              onSubmit={(e) => {
+                e.preventDefault();
+                const updatedSettings = { name: tempShopName.trim() || 'সাব্বির পুষ্টি দোকান', address: tempShopAddress.trim() || 'হাজীগঞ্জ বাজার, চাঁদপুর' };
+                setShopSettings(updatedSettings);
+                saveShopSettings(updatedSettings);
+                setShowShopSettingsModal(false);
+                alert('দোকানের নাম ও ঠিকানা সফলভাবে পরিবর্তন করা হয়েছে!');
+              }} 
+              className="space-y-4"
+            >
+              <div className="space-y-1.5 text-left">
+                <label className="text-xs font-bold text-natural-dark">দোকানের নাম *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="যেমন: সাব্বির পুষ্টি দোকান"
+                  value={tempShopName}
+                  onChange={(e) => setTempShopName(e.target.value)}
+                  className="w-full bg-[#FDFBF7] border border-natural-border rounded-lg p-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-natural-accent text-natural-dark font-medium"
+                />
+              </div>
+
+              <div className="space-y-1.5 text-left">
+                <label className="text-xs font-bold text-natural-dark">ঠিকানা / মোবাইল / বিবরণ *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="যেমন: হাজীগঞ্জ বাজার, চাঁদপুর"
+                  value={tempShopAddress}
+                  onChange={(e) => setTempShopAddress(e.target.value)}
+                  className="w-full bg-[#FDFBF7] border border-natural-border rounded-lg p-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-natural-accent text-natural-dark font-medium"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowShopSettingsModal(false)}
+                  className="w-1/2 bg-natural-light hover:bg-[#EAE4D2] text-[#2D3319] font-bold py-2.5 rounded-xl text-sm cursor-pointer"
+                >
+                  বাতিল করুন
+                </button>
+                <button
+                  type="submit"
+                  className="w-1/2 bg-natural-accent hover:bg-natural-accent-hover text-white font-bold py-2.5 rounded-xl text-sm cursor-pointer"
+                >
+                  সংরক্ষণ করুন
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -22,6 +22,8 @@ interface DashboardProps {
   onNavigate: (view: 'sale' | 'products' | 'customers' | 'transactions') => void;
   onViewTransaction: (tx: Transaction) => void;
   onFactoryReset: () => Promise<void>;
+  selectedDateFilter?: string;
+  shopSettings?: { name: string; address: string };
 }
 
 export default function Dashboard({ 
@@ -31,7 +33,9 @@ export default function Dashboard({
   transactions, 
   onNavigate,
   onViewTransaction,
-  onFactoryReset
+  onFactoryReset,
+  selectedDateFilter = '',
+  shopSettings = { name: 'সাব্বির পুষ্টি দোকান', address: 'হাজীগঞ্জ বাজার, চাঁদপুর' }
 }: DashboardProps) {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
@@ -40,9 +44,9 @@ export default function Dashboard({
   // Calculate stats
   const totalDue = customers.reduce((sum, c) => sum + c.dueAmount, 0);
   
-  // Sales calculation (today split)
-  const todayStr = new Date().toISOString().split('T')[0];
-  const todayTransactions = transactions.filter(t => t.date.startsWith(todayStr));
+  // Sales calculation (today split or selected date filter split)
+  const targetFilterDate = selectedDateFilter || new Date().toISOString().split('T')[0];
+  const todayTransactions = transactions.filter(t => t.date.startsWith(targetFilterDate));
   const todaySalesSum = todayTransactions
     .filter(t => t.type === 'sale')
     .reduce((sum, t) => sum + t.totalAmount, 0);
@@ -150,7 +154,7 @@ export default function Dashboard({
               </button>
             </div>
             <h1 className="text-2xl md:text-3.5xl font-extrabold tracking-tight mt-3 text-[#FDFBF7]">
-              সাব্বির পুষ্টি দোকান
+              {shopSettings.name}
             </h1>
             <p className="text-[#E9E2D0] mt-2 text-sm md:text-base max-w-xl font-normal leading-relaxed">
               ডিম এবং মৌসুমী পণ্যের দৈনন্দিন স্টক, বিক্রি ও ক্রেতাদের বাকির হিসাব ডিজিটাল খাতা।
@@ -172,13 +176,15 @@ export default function Dashboard({
       <div id="stats-grid" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Metric 1 */}
         <div className="bg-natural-header p-5 rounded-2xl shadow-sm border border-natural-border flex items-center justify-between">
-          <div className="space-y-1">
-            <p className="text-natural-text/70 text-sm font-medium">আজকের মোট বিক্রি</p>
+          <div className="space-y-1 text-left col-span-3">
+            <p className="text-natural-text/70 text-sm font-bold">
+              {selectedDateFilter ? 'নির্বাচিত দিনের বিক্রি' : 'আজকের মোট বিক্রি'}
+            </p>
             <h3 className="text-2.5xl font-bold font-mono tracking-tight text-natural-dark">
               {formatPrice(todaySalesSum)}
             </h3>
-            <p className="text-xs text-natural-text/60 flex items-center gap-1">
-              <span className="inline-block w-1.5 h-1.5 rounded-full bg-natural-accent"></span>
+            <p className="text-xs text-natural-text/60 flex items-center gap-1 font-semibold">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-natural-accent animate-pulse"></span>
               {formatNumberBengali(todayTransactions.filter(t => t.type === 'sale').length)} টি রশিদ কাটা হয়েছে
             </p>
           </div>
@@ -189,12 +195,14 @@ export default function Dashboard({
 
         {/* Metric 2 */}
         <div className="bg-natural-header p-5 rounded-2xl shadow-sm border border-natural-border flex items-center justify-between">
-          <div className="space-y-1">
-            <p className="text-natural-text/70 text-sm font-medium">আজকের নগদ আদায়</p>
+          <div className="space-y-1 text-left col-span-3">
+            <p className="text-natural-text/70 text-sm font-bold">
+              {selectedDateFilter ? 'নির্বাচিত দিনে সংগ্রহ' : 'আজকের নগদ আদায়'}
+            </p>
             <h3 className="text-2.5xl font-bold font-mono tracking-tight text-[#8B5E3C]">
               {formatPrice(todayCashCollected)}
             </h3>
-            <p className="text-xs text-natural-text/60">ক্রয়মূল্য ও পূর্বের বাকি আদায়</p>
+            <p className="text-xs text-natural-text/60 font-semibold text-[#8B5E3C]/80">রশিদ সংগ্রহ ও পূর্বের বাকি আদায়</p>
           </div>
           <div className="bg-natural-light p-3.5 rounded-xl text-[#CDA681]">
             <DollarSign className="w-6 h-6" />

@@ -55,6 +55,13 @@ export default function NewSale({
   const [paidAmountInput, setPaidAmountInput] = useState<string>(''); // Empty or string
   const [notes, setNotes] = useState<string>('');
   
+  // Custom states for sales discounts, searchable customers, and retail customer details
+  const [discountInput, setDiscountInput] = useState<string>('');
+  const [customerSearchQuery, setCustomerSearchQuery] = useState<string>('');
+  const [isCustomerDropdownOpen, setIsCustomerDropdownOpen] = useState<boolean>(false);
+  const [retailCustomerName, setRetailCustomerName] = useState<string>('');
+  const [retailCustomerPhone, setRetailCustomerPhone] = useState<string>('');
+
   // Custom rapid-customer creation states
   const [showQuickCustomerModal, setShowQuickCustomerModal] = useState(false);
   const [newCustName, setNewCustName] = useState('');
@@ -109,13 +116,32 @@ export default function NewSale({
     });
   };
 
+  // Set cart quantity directly (manual typewriter input)
+  const setQuantityDirectly = (id: string, type: 'egg' | 'custom', qty: number) => {
+    setCart(prevCart => {
+      return prevCart.map(item => {
+        if (item.id === id && item.type === type) {
+          if (qty <= 0) return { ...item, quantity: 1 };
+          if (qty > item.maxStock) {
+            alert(`দুঃখিত! এই পণ্যটির সর্বোচ্চ মজুদ আছে মাত্র ${formatNumberBengali(item.maxStock)} ${item.unit}।`);
+            return { ...item, quantity: item.maxStock };
+          }
+          return { ...item, quantity: qty };
+        }
+        return item;
+      });
+    });
+  };
+
   // Remove single item from cart
   const removeFromCart = (id: string, type: 'egg' | 'custom') => {
     setCart(prevCart => prevCart.filter(item => !(item.id === id && item.type === type)));
   };
 
   // Calculations
-  const totalAmount = cart.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
+  const discountAmount = parseFloat(discountInput) || 0;
+  const subtotalAmount = cart.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
+  const totalAmount = Math.max(0, subtotalAmount - discountAmount);
   const paidAmount = paidAmountInput === '' ? totalAmount : parseFloat(paidAmountInput) || 0;
   const rawDue = totalAmount - paidAmount;
   const dueAmount = rawDue > 0 ? rawDue : 0;
@@ -145,6 +171,8 @@ export default function NewSale({
       if (foundCustomer) {
         customerName = foundCustomer.name;
       }
+    } else if (retailCustomerName.trim()) {
+      customerName = `খুচরা: ${retailCustomerName.trim()}`;
     }
 
     // Build Transaction object
@@ -168,7 +196,10 @@ export default function NewSale({
       customerId: selectedCustomerId || undefined,
       customerName,
       items: transactionItems,
-      notes: notes || 'বিক্রি রশিদ'
+      discount: discountAmount > 0 ? discountAmount : undefined,
+      retailCustomerName: retailCustomerName.trim() || undefined,
+      retailCustomerPhone: retailCustomerPhone.trim() || undefined,
+      notes: notes || (discountAmount > 0 ? `ছাড় দেওয়া বিক্রি (ডিসকাউন্ট ৳${discountAmount})` : 'বিক্রি রশিদ')
     };
 
     // 1. Reduce Stock
@@ -191,7 +222,11 @@ export default function NewSale({
     // Reset workflow
     setCart([]);
     setPaidAmountInput('');
+    setDiscountInput('');
     setSelectedCustomerId('');
+    setCustomerSearchQuery('');
+    setRetailCustomerName('');
+    setRetailCustomerPhone('');
     setNotes('');
     alert('বিক্রি রশিদ সফলভাবে তৈরি হয়েছে!');
     onNavigate('dashboard');
@@ -343,15 +378,28 @@ export default function NewSale({
                   {/* Quantity Actions */}
                   <div className="flex items-center bg-[#FDFBF7] border border-natural-border rounded-lg p-0.5 text-xs">
                     <button
+                      type="button"
                       onClick={() => updateQuantity(item.id, item.type, -1)}
                       className="p-1 text-natural-text/60 hover:bg-natural-light rounded cursor-pointer"
                     >
                       <Minus className="w-3.5 h-3.5" />
                     </button>
-                    <span className="px-2 font-mono font-bold text-natural-dark">
-                      {formatNumberBengali(item.quantity)}
-                    </span>
+                    
+                    <input
+                      type="number"
+                      min="1"
+                      max={item.maxStock}
+                      value={item.quantity === 0 ? '' : item.quantity}
+                      onChange={(e) => {
+                        const parsed = parseInt(e.target.value);
+                        const val = isNaN(parsed) ? 0 : parsed;
+                        setQuantityDirectly(item.id, item.type, val);
+                      }}
+                      className="w-12 text-center font-mono font-bold text-natural-dark bg-transparent border-none focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none focus:ring-0 focus:border-none p-0 inline-block focus:bg-natural-light/30 rounded"
+                    />
+
                     <button
+                      type="button"
                       onClick={() => updateQuantity(item.id, item.type, 1)}
                       className="p-1 text-natural-text/60 hover:bg-natural-light rounded cursor-pointer"
                     >
@@ -366,6 +414,7 @@ export default function NewSale({
 
                   {/* Delete from cart */}
                   <button
+                    type="button"
                     onClick={() => removeFromCart(item.id, item.type)}
                     className="p-1 text-red-700 hover:bg-red-50 hover:text-red-900 rounded cursor-pointer"
                   >
@@ -376,25 +425,35 @@ export default function NewSale({
             ))
           )}
         </div>
-
-        {/* Subtotal Display */}
+            {/* Subtotal Display */}
         {cart.length > 0 && (
-          <div className="bg-[#FAF6EC] p-3 rounded-xl space-y-1.5 text-sm border border-natural-border/60">
+          <div className="bg-[#FAF6EC] p-3.5 rounded-xl space-y-2 text-sm border border-[#CDA681]/30">
             <div className="flex justify-between font-semibold text-natural-text/75">
-              <span>মোট আইটেমের দাম:</span>
-              <span className="font-mono text-natural-dark font-bold">{formatPrice(totalAmount)}</span>
+              <span>আইটেমের মোট সাবটোটাল:</span>
+              <span className="font-mono text-natural-dark font-bold">{formatPrice(subtotalAmount)}</span>
+            </div>
+            {discountAmount > 0 && (
+              <div className="flex justify-between font-semibold text-red-600 text-xs">
+                <span>বিশেষ রিয়াত বা ছাড় (ডিসকাউন্ট হিসেবে):</span>
+                <span className="font-mono font-bold">- {formatPrice(discountAmount)}</span>
+              </div>
+            )}
+            <div className="flex justify-between font-extrabold text-natural-accent border-t border-natural-border/50 pt-2 text-base">
+              <span>সর্বমোট পরিশোধযোগ্য মূল্য:</span>
+              <span className="font-mono">{formatPrice(totalAmount)}</span>
             </div>
           </div>
         )}
 
         {/* Billing Form */}
         <form onSubmit={handleCheckout} className="space-y-4 pt-1">
-          {/* Customer Selection */}
-          <div className="space-y-1.5 text-left">
+          
+          {/* Custom Searchable Customer Selector Dropdown */}
+          <div className="space-y-1.5 text-left relative" id="customer-search-dropdown-container">
             <div className="flex justify-between items-center">
               <label className="text-xs font-bold text-natural-dark flex items-center gap-1">
                 <User className="w-3.5 h-3.5 text-natural-accent" />
-                <span>ক্রেতা নির্বাচন করুন</span>
+                <span>ক্রেতা সিলেক্ট করুন (সার্চ করুন)</span>
               </label>
               
               <button
@@ -407,37 +466,140 @@ export default function NewSale({
               </button>
             </div>
 
-            <select
-              value={selectedCustomerId}
-              onChange={(e) => setSelectedCustomerId(e.target.value)}
-              className="w-full bg-[#FDFBF7] border border-natural-border text-sm rounded-lg p-2.5 text-natural-dark font-medium focus:outline-none focus:ring-1 focus:ring-natural-accent"
-            >
-              <option value="">সাধারণ খদ্দের / নগদ খদ্দর</option>
-              {customers.map(c => (
-                <option key={c.id} value={c.id} className="text-natural-dark">
-                  {c.name} {c.phone ? `(${c.phone})` : ''} — বকেয়া: ৳{c.dueAmount}
-                </option>
-              ))}
-            </select>
+            <div className="relative">
+              <input
+                type="text"
+                placeholder={
+                  selectedCustomerId 
+                    ? (customers.find(c => c.id === selectedCustomerId)?.name || 'কাস্টমার')
+                    : 'কাস্টমারের নাম সার্চ করুন (না লিখলে নগদ খদ্দের হিসেবে গণ্য হবে)...'
+                }
+                value={customerSearchQuery}
+                onFocus={() => setIsCustomerDropdownOpen(true)}
+                onChange={(e) => {
+                  setCustomerSearchQuery(e.target.value);
+                  setIsCustomerDropdownOpen(true);
+                }}
+                className="w-full bg-[#FDFBF7] border border-natural-border text-sm rounded-lg p-2.5 text-natural-dark font-bold focus:outline-none focus:ring-1 focus:ring-natural-accent"
+              />
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                {selectedCustomerId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedCustomerId('');
+                      setCustomerSearchQuery('');
+                    }}
+                    className="text-xs text-red-500 hover:text-red-700 font-bold px-1 rounded hover:bg-red-50"
+                  >
+                    রিসেট
+                  </button>
+                )}
+                <span className="text-[10px] text-natural-text/60">▼</span>
+              </div>
+            </div>
+
+            {isCustomerDropdownOpen && (
+              <div className="absolute left-0 right-0 mt-1 bg-[#FDFBF7] border border-natural-border shadow-xl rounded-xl max-h-56 overflow-y-auto z-50 p-1 divide-y divide-natural-border/30">
+                <div 
+                  onClick={() => {
+                    setSelectedCustomerId('');
+                    setCustomerSearchQuery('');
+                    setIsCustomerDropdownOpen(false);
+                  }}
+                  className="p-2 py-2.5 text-xs text-natural-text hover:bg-natural-accent hover:text-white rounded-lg cursor-pointer transition flex justify-between items-center font-semibold"
+                >
+                  <span>না গেলেই ভালো (সাধারণ নগদ খদ্দের / Random Customer)</span>
+                  <span className="text-[9px] bg-natural-light text-natural-text px-1.5 py-0.5 rounded font-bold">ডিফল্ট নগদ</span>
+                </div>
+                {customers
+                  .filter(c => c.name.toLowerCase().includes(customerSearchQuery.toLowerCase()) || (c.phone && c.phone.includes(customerSearchQuery)))
+                  .map(c => (
+                    <div
+                      key={c.id}
+                      onClick={() => {
+                        setSelectedCustomerId(c.id);
+                        setCustomerSearchQuery(c.name);
+                        setIsCustomerDropdownOpen(false);
+                      }}
+                      className={`p-2 py-2.5 text-xs text-natural-dark hover:bg-natural-accent hover:text-white rounded-lg cursor-pointer transition flex justify-between items-center ${
+                        selectedCustomerId === c.id ? 'bg-natural-light border-l-2 border-natural-accent' : ''
+                      }`}
+                    >
+                      <div className="text-left font-sans">
+                        <p className="font-bold text-xs">{c.name}</p>
+                        <p className="text-[10px] opacity-75">{c.phone || 'মোবাইল উল্লেখ নেই'}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 px-1 py-0.5 rounded">বকেয়া: ৳{c.dueAmount}</p>
+                      </div>
+                    </div>
+                  ))}
+                {customers.filter(c => c.name.toLowerCase().includes(customerSearchQuery.toLowerCase()) || (c.phone && c.phone.includes(customerSearchQuery))).length === 0 && (
+                  <div className="p-3 text-xs text-natural-text/60 text-center">কোনো কাস্টমার পাওয়া যায়নি।</div>
+                )}
+              </div>
+            )}
           </div>
 
-          {/* Money collections inputs */}
-          <div className="grid grid-cols-2 gap-3 text-left">
+          {/* Random customer details fields */}
+          {!selectedCustomerId && (
+            <div className="p-3 bg-natural-light/40 border border-natural-border/70 rounded-xl space-y-2 text-xs text-left">
+              <span className="font-extrabold text-[#8B5E3C] block">অপরিচিত / খুচরা খদ্দেরের তথ্য সংরক্ষণ (ঐচ্ছিক):</span>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] text-natural-text font-bold mb-1 block">ক্রেতার নাম</label>
+                  <input
+                    type="text"
+                    placeholder="যেমন: মো: কাশেম মিয়া"
+                    value={retailCustomerName}
+                    onChange={(e) => setRetailCustomerName(e.target.value)}
+                    className="w-full bg-[#FDFBF7] border border-natural-border rounded-lg p-2 focus:ring-1 focus:ring-natural-accent focus:outline-none font-medium text-xs text-natural-dark"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-natural-text font-bold mb-1 block">মোবাইল নাম্বার</label>
+                  <input
+                    type="text"
+                    placeholder="যেমন: ০১৭০০০০০০০০"
+                    value={retailCustomerPhone}
+                    onChange={(e) => setRetailCustomerPhone(e.target.value)}
+                    className="w-full bg-[#FDFBF7] border border-natural-border rounded-lg p-2 focus:ring-1 focus:ring-natural-accent focus:outline-none font-medium text-xs text-natural-dark"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Money collections inputs: Discount, Received cash, remaining balance dues */}
+          <div className="grid grid-cols-3 gap-2.5 text-left">
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-natural-dark">নগদ প্রদান (৳)</label>
+              <label className="text-xs font-bold text-natural-dark">ছাড়/ডিসকাউন্ট(৳)</label>
+              <input
+                type="number"
+                placeholder="0"
+                value={discountInput}
+                onChange={(e) => setDiscountInput(e.target.value)}
+                min="0"
+                className="w-full bg-[#FDFBF7] border border-natural-border rounded-lg p-2 font-mono font-semibold focus:outline-none focus:ring-1 focus:ring-natural-accent text-sm text-natural-dark"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-natural-dark">নগদ গ্রহণ (৳)</label>
               <input
                 type="number"
                 placeholder={cart.length > 0 ? totalAmount.toString() : '0'}
                 value={paidAmountInput}
                 onChange={(e) => setPaidAmountInput(e.target.value)}
                 min="0"
-                className="w-full bg-[#FDFBF7] border border-natural-border rounded-lg p-2.5 font-mono font-semibold focus:outline-none focus:ring-1 focus:ring-natural-accent text-sm text-natural-dark"
+                className="w-full bg-[#FDFBF7] border border-natural-border rounded-lg p-2 font-mono font-semibold focus:outline-none focus:ring-1 focus:ring-natural-accent text-sm text-natural-dark"
               />
             </div>
             
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-red-600">বাকি টাকা (৳)</label>
-              <div className="w-full bg-red-50/50 border border-red-200 rounded-lg p-2.5 font-mono font-bold text-red-700 select-none text-sm">
+            <div className="space-y-1.5 col-span-1">
+              <label className="text-xs font-bold text-red-600">বাকি বকেয়া (৳)</label>
+              <div className="w-full bg-red-50/50 border border-red-200 rounded-lg p-2 font-mono font-bold text-red-700 select-none text-sm leading-6">
                 {formatPrice(dueAmount)}
               </div>
             </div>
