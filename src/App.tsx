@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { motion } from 'motion/react';
 import { 
   getEggInventory, 
   saveEggInventory, 
@@ -176,18 +177,27 @@ export default function App() {
 
   // State update handlers
   const handleUpdateEggStockOnly = (type: string, reduceQty: number) => {
-    const updated = eggs.map(e => e.type === type ? { ...e, stock: Math.max(e.stock - reduceQty, 0) } : e);
-    updateEggsState(updated);
+    setEggs(prevEggs => {
+      const updated = prevEggs.map(e => e.type === type ? { ...e, stock: Math.max(e.stock - reduceQty, 0) } : e);
+      saveEggInventory(updated);
+      return updated;
+    });
   };
 
   const handleUpdateCustomStockOnly = (id: string, reduceQty: number) => {
-    const updated = customItems.map(item => item.id === id ? { ...item, stock: Math.max(item.stock - reduceQty, 0) } : item);
-    updateCustomItemsState(updated);
+    setCustomItems(prevItems => {
+      const updated = prevItems.map(item => item.id === id ? { ...item, stock: Math.max(item.stock - reduceQty, 0) } : item);
+      saveCustomItems(updated);
+      return updated;
+    });
   };
 
   const handleUpdateCustomerDueOnly = (id: string, dueDelta: number) => {
-    const updated = customers.map(c => c.id === id ? { ...c, dueAmount: Math.max(c.dueAmount + dueDelta, 0) } : c);
-    updateCustomersState(updated);
+    setCustomers(prevCustomers => {
+      const updated = prevCustomers.map(c => c.id === id ? { ...c, dueAmount: Math.max(c.dueAmount + dueDelta, 0) } : c);
+      saveCustomers(updated);
+      return updated;
+    });
   };
 
   const handleAddNewCustomer = (name: string, phone: string, initialDue: number): Customer => {
@@ -499,68 +509,75 @@ export default function App() {
       <main className="flex-grow w-full max-w-7xl mx-auto px-4 py-6 md:py-8">
         
         {/* Render Active View Routing Component */}
-        {activeView === 'dashboard' && (
-          <Dashboard
-            eggs={eggs}
-            customItems={customItems}
-            customers={customers}
-            transactions={transactions}
-            onNavigate={setActiveView}
-            onViewTransaction={handleViewTransactionReceipt}
-            onFactoryReset={handleFactoryReset}
-            selectedDateFilter={selectedDateFilter}
-            shopSettings={shopSettings}
-          />
-        )}
+        <motion.div
+          key={activeView}
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ cubicBezier: [0.16, 1, 0.3, 1], duration: 0.6 }}
+        >
+          {activeView === 'dashboard' && (
+            <Dashboard
+              eggs={eggs}
+              customItems={customItems}
+              customers={customers}
+              transactions={transactions}
+              onNavigate={setActiveView}
+              onViewTransaction={handleViewTransactionReceipt}
+              onFactoryReset={handleFactoryReset}
+              selectedDateFilter={selectedDateFilter}
+              shopSettings={shopSettings}
+            />
+          )}
 
-        {activeView === 'sale' && (
-          <NewSale
-            eggs={eggs}
-            customItems={customItems}
-            customers={customers}
-            onAddTransaction={handleAddTransaction}
-            onUpdateEggStock={handleUpdateEggStockOnly}
-            onUpdateCustomStock={handleUpdateCustomStockOnly}
-            onUpdateCustomerDue={handleUpdateCustomerDueOnly}
-            onAddNewCustomer={handleAddNewCustomer}
-            onNavigate={setActiveView}
-          />
-        )}
+          {activeView === 'sale' && (
+            <NewSale
+              eggs={eggs}
+              customItems={customItems}
+              customers={customers}
+              onAddTransaction={handleAddTransaction}
+              onUpdateEggStock={handleUpdateEggStockOnly}
+              onUpdateCustomStock={handleUpdateCustomStockOnly}
+              onUpdateCustomerDue={handleUpdateCustomerDueOnly}
+              onAddNewCustomer={handleAddNewCustomer}
+              onNavigate={setActiveView}
+            />
+          )}
 
-        {activeView === 'products' && (
-          <Products
-            eggs={eggs}
-            customItems={customItems}
-            onUpdateEggAll={updateEggsState}
-            onAddCustomItem={handleAddCustomItem}
-            onRemoveCustomItem={handleRemoveCustomItem}
-            onUpdateCustomAll={updateCustomItemsState}
-            onAddTransaction={handleAddTransaction}
-          />
-        )}
+          {activeView === 'products' && (
+            <Products
+              eggs={eggs}
+              customItems={customItems}
+              onUpdateEggAll={updateEggsState}
+              onAddCustomItem={handleAddCustomItem}
+              onRemoveCustomItem={handleRemoveCustomItem}
+              onUpdateCustomAll={updateCustomItemsState}
+              onAddTransaction={handleAddTransaction}
+            />
+          )}
 
-        {activeView === 'customers' && (
-          <Customers
-            customers={customers}
-            transactions={transactions}
-            onAddNewCustomer={handleAddNewCustomer}
-            onRemoveCustomer={handleRemoveCustomer}
-            onUpdateCustomerDue={handleUpdateCustomerDueOnly}
-            onAddTransaction={handleAddTransaction}
-          />
-        )}
+          {activeView === 'customers' && (
+            <Customers
+              customers={customers}
+              transactions={transactions}
+              onAddNewCustomer={handleAddNewCustomer}
+              onRemoveCustomer={handleRemoveCustomer}
+              onUpdateCustomerDue={handleUpdateCustomerDueOnly}
+              onAddTransaction={handleAddTransaction}
+            />
+          )}
 
-        {activeView === 'transactions' && (
-          <Transactions
-            transactions={transactions}
-            onViewTransaction={handleViewTransactionReceipt}
-            selectedTransaction={selectedTransaction}
-            onDeleteTransaction={handleDeleteTransaction}
-            onEditTransaction={handleEditTransaction}
-            customers={customers}
-            selectedDateFilter={selectedDateFilter}
-          />
-        )}
+          {activeView === 'transactions' && (
+            <Transactions
+              transactions={transactions}
+              onViewTransaction={handleViewTransactionReceipt}
+              selectedTransaction={selectedTransaction}
+              onDeleteTransaction={handleDeleteTransaction}
+              onEditTransaction={handleEditTransaction}
+              customers={customers}
+              selectedDateFilter={selectedDateFilter}
+            />
+          )}
+        </motion.div>
       </main>
 
       {/* Humble Aesthetic Footing Credits */}

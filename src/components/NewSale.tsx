@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { EggInventory, CustomItem, Customer, Transaction, TransactionItem } from '../types';
+import { motion } from 'motion/react';
 import { 
   ShoppingCart, 
   Trash2, 
@@ -23,7 +24,7 @@ interface NewSaleProps {
   onUpdateCustomStock: (id: string, reduceQty: number) => void;
   onUpdateCustomerDue: (id: string, addDue: number) => void;
   onAddNewCustomer: (name: string, phone: string, initialDue: number) => Customer;
-  onNavigate: (view: 'dashboard' | 'customers') => void;
+  onNavigate: (view: 'dashboard' | 'sale' | 'products' | 'customers' | 'transactions') => void;
 }
 
 interface CartItem {
@@ -69,6 +70,9 @@ export default function NewSale({
 
   // Search inside custom items
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Success confirmed transaction state
+  const [lastConfirmedTransaction, setLastConfirmedTransaction] = useState<Transaction | null>(null);
 
   // Format Helper
   const formatPrice = (price: number) => `৳${price.toLocaleString('bn-BD')}`;
@@ -219,7 +223,8 @@ export default function NewSale({
     // 3. Save transaction
     onAddTransaction(newTransaction);
 
-    // Reset workflow
+    // Save transaction for success receipt voucher view and reset states
+    setLastConfirmedTransaction(newTransaction);
     setCart([]);
     setPaidAmountInput('');
     setDiscountInput('');
@@ -228,8 +233,6 @@ export default function NewSale({
     setRetailCustomerName('');
     setRetailCustomerPhone('');
     setNotes('');
-    alert('বিক্রি রশিদ সফলভাবে তৈরি হয়েছে!');
-    onNavigate('dashboard');
   };
 
   // Quick Customer Creation
@@ -249,6 +252,163 @@ export default function NewSale({
   const filteredCustomItems = customItems.filter(item => 
     item.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  if (lastConfirmedTransaction) {
+    return (
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        transition={{ type: "spring", duration: 0.5 }}
+        className="max-w-md mx-auto bg-natural-header border border-[#CDA681]/30 rounded-3xl p-6 shadow-xl space-y-6 text-center text-sans mt-4"
+        id="receipt-success-screen"
+      >
+        {/* Animated Success Badge */}
+        <div className="flex flex-col items-center gap-2">
+          <motion.div 
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ type: "spring", stiffness: 200, damping: 15, delay: 0.1 }}
+            className="w-16 h-16 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center text-3xl shadow-md font-bold"
+          >
+            ✓
+          </motion.div>
+          <motion.h3 
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="text-xl font-extrabold text-natural-dark mt-2"
+          >
+            বিক্রি রসিদ সফলভাবে তৈরি হয়েছে!
+          </motion.h3>
+          <p className="text-xs text-natural-text/75">রসিদ নম্বর: <span className="font-mono font-semibold text-natural-accent">{lastConfirmedTransaction.id}</span></p>
+        </div>
+
+        {/* Paper Voucher Card */}
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="bg-[#FDFBF7] border border-[#CDA681]/25 rounded-2xl p-5 shadow-inner text-left text-xs space-y-4 font-sans relative overflow-hidden"
+        >
+          {/* Decorative receipt tear-apart dots at top/bottom */}
+          <div className="absolute top-0 left-0 right-0 h-1 bg-repeat-x" style={{ backgroundImage: "linear-gradient(to right, #CDA681 33%, transparent 33%)", backgroundSize: "6px 1px" }} />
+          
+          <div className="flex justify-between font-semibold text-natural-text/75 border-b border-natural-border/40 pb-2">
+            <span>তারিখ ও সময়:</span>
+            <span className="font-mono text-natural-dark">{new Date(lastConfirmedTransaction.date).toLocaleString('bn-BD')}</span>
+          </div>
+
+          <div className="flex justify-between font-semibold text-natural-text/75 border-b border-natural-border/40 pb-2">
+            <span>ক্রেতার নাম:</span>
+            <span className="text-natural-dark font-bold">{lastConfirmedTransaction.customerName}</span>
+          </div>
+
+          {lastConfirmedTransaction.retailCustomerPhone && (
+            <div className="flex justify-between font-semibold text-natural-text/75 border-b border-natural-border/40 pb-2">
+              <span>মোবাইল নং:</span>
+              <span className="font-mono text-natural-dark">{lastConfirmedTransaction.retailCustomerPhone}</span>
+            </div>
+          )}
+
+          {/* Table of items */}
+          <div className="space-y-1.5 py-1">
+            <span className="font-bold text-[#8B5E3C] block mb-1">বিক্রিত পণ্যসমূহ:</span>
+            <div className="divide-y divide-natural-border/30 border-t border-b border-natural-border/30">
+              {lastConfirmedTransaction.items?.map((item, idx) => (
+                <div key={idx} className="flex justify-between py-2 font-medium">
+                  <div className="text-natural-dark">
+                    <span>{item.itemName}</span>
+                    <span className="text-natural-text/70 text-[10px] ml-1">({formatNumberBengali(item.quantity)} {item.unit} × ৳{item.unitPrice})</span>
+                  </div>
+                  <span className="font-mono text-natural-dark font-bold">৳{(item.totalPrice).toLocaleString('bn-BD')}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Money Breakdown info */}
+          <div className="space-y-1.5 pt-1">
+            {lastConfirmedTransaction.discount && lastConfirmedTransaction.discount > 0 && (
+              <div className="flex justify-between text-red-600 font-semibold text-[11px]">
+                <span>ছাড় পেয়েছেন:</span>
+                <span className="font-mono">- {formatPrice(lastConfirmedTransaction.discount)}</span>
+              </div>
+            )}
+            
+            <div className="flex justify-between text-natural-dark font-bold text-sm">
+              <span>পরিশোধযোগ্য মোট টাকা:</span>
+              <span className="font-mono">{formatPrice(lastConfirmedTransaction.totalAmount)}</span>
+            </div>
+
+            <div className="flex justify-between text-[#8B5E3C] font-semibold text-xs border-t border-natural-border/30 pt-2 pb-1">
+              <span>নগদ গ্রহণ:</span>
+              <span className="font-mono font-bold">{formatPrice(lastConfirmedTransaction.paidAmount)}</span>
+            </div>
+
+            {lastConfirmedTransaction.dueAmount > 0 ? (
+              <div className="flex justify-between text-red-650 font-extrabold text-xs">
+                <span>বাকির পরিমাণ (বকেয়া):</span>
+                <span className="font-mono font-black">{formatPrice(lastConfirmedTransaction.dueAmount)}</span>
+              </div>
+            ) : (
+              <div className="flex justify-between text-emerald-700 font-extrabold text-[10px] bg-emerald-50 px-1.5 py-0.5 rounded w-fit ml-auto border border-emerald-100">
+                <span>✓ সম্পূর্ণ মূল্য পরিশোধিত</span>
+              </div>
+            )}
+          </div>
+
+          {lastConfirmedTransaction.notes && (
+            <div className="bg-natural-light/50 p-2.5 rounded-lg text-[10px] text-natural-text/75 border border-natural-border/30 leading-relaxed font-medium">
+              <span className="font-bold underline block mb-0.5">রসিদ নোট:</span>
+              {lastConfirmedTransaction.notes}
+            </div>
+          )}
+        </motion.div>
+
+        {/* Action Buttons */}
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.4 }}
+          className="flex flex-col gap-2 pt-2"
+        >
+          <button
+            onClick={() => setLastConfirmedTransaction(null)}
+            type="button"
+            className="w-full bg-natural-accent hover:bg-[#835332] active:scale-95 text-white font-bold py-3 px-4 rounded-xl shadow-md transition cursor-pointer flex items-center justify-center gap-2 text-sm"
+          >
+            <ShoppingCart className="w-4 h-4" />
+            <span>নতুন বিক্রি রশিদ শুরু করুন</span>
+          </button>
+          
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <button
+              onClick={() => {
+                setLastConfirmedTransaction(null);
+                onNavigate('dashboard');
+              }}
+              type="button"
+              className="bg-natural-light hover:bg-[#EAE4D2] active:scale-95 text-natural-dark font-bold py-2.5 px-3 rounded-lg border border-natural-border transition cursor-pointer"
+            >
+              ড্যাশবোর্ডে ফিরে যান
+            </button>
+            
+            <button
+              onClick={() => {
+                setLastConfirmedTransaction(null);
+                onNavigate('transactions');
+              }}
+              type="button"
+              className="bg-[#FAF6EC] hover:bg-[#F2ECD8] active:scale-95 text-natural-accent font-bold py-2.5 px-3 rounded-lg border border-[#CDA681]/30 transition cursor-pointer"
+            >
+              লেনদেন খতিয়ানে যান
+            </button>
+          </div>
+        </motion.div>
+      </motion.div>
+    );
+  }
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6" id="new-sale-container">
