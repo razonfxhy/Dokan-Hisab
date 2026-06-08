@@ -11,7 +11,8 @@ import {
   syncAllDataWithCloud,
   deleteCustomerFromCloud,
   deleteCustomItemFromCloud,
-  deleteTransactionFromCloud
+  deleteTransactionFromCloud,
+  purgeAllDbToZero
 } from './utils/storage';
 import { EggInventory, CustomItem, Customer, Transaction } from './types';
 import Dashboard from './components/Dashboard';
@@ -180,6 +181,20 @@ export default function App() {
     const updated = customItems.filter(item => item.id !== id);
     updateCustomItemsState(updated);
     deleteCustomItemFromCloud(id);
+  };
+
+  const handleFactoryReset = async () => {
+    setCloudStatus('syncing');
+    const isSuccess = await purgeAllDbToZero();
+    if (isSuccess) {
+      setEggs(getEggInventory());
+      setCustomItems(getCustomItems());
+      setCustomers(getCustomers());
+      setTransactions(getTransactions());
+      setCloudStatus('synced');
+    } else {
+      setCloudStatus('failed');
+    }
   };
 
   const handleAddTransaction = (newTx: Transaction) => {
@@ -410,6 +425,7 @@ export default function App() {
             transactions={transactions}
             onNavigate={setActiveView}
             onViewTransaction={handleViewTransactionReceipt}
+            onFactoryReset={handleFactoryReset}
           />
         )}
 

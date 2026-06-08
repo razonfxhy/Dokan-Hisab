@@ -380,6 +380,16 @@ export const syncAllDataWithCloud = async () => {
     }
     localStorage.setItem(TRANSACTIONS_KEY, JSON.stringify(syncedTx));
 
+    // Heuristic: If there are absolutely zero receipts recorded, any positive egg stock must be residual mockup data.
+    // Force reset all egg stock to zero to guarantee zero-defaults on clean runs.
+    if (syncedTx.length === 0) {
+      syncedEggs = defaultEggs;
+      for (const e of defaultEggs) {
+        await setDoc(doc(db, 'eggs', e.type), e);
+      }
+      localStorage.setItem(EGGS_KEY, JSON.stringify(syncedEggs));
+    }
+
     return {
       eggs: syncedEggs,
       customItems: syncedItems,
@@ -391,3 +401,47 @@ export const syncAllDataWithCloud = async () => {
     return null;
   }
 };
+
+// FULL FACTORY RESET CONTROL: Wipes all collections to absolute clean zero
+export const purgeAllDbToZero = async (): Promise<boolean> => {
+  try {
+    // 1. Flush local cache immediately
+    localStorage.setItem(EGGS_KEY, JSON.stringify(defaultEggs));
+    localStorage.setItem(CUSTOM_ITEMS_KEY, JSON.stringify([]));
+    localStorage.setItem(CUSTOMERS_KEY, JSON.stringify([]));
+    localStorage.setItem(TRANSACTIONS_KEY, JSON.stringify([]));
+    localStorage.setItem(PENDING_SYNC_KEY, JSON.stringify({
+      eggs: false,
+      customItems: {},
+      customers: {},
+      transactions: {}
+    }));
+
+    // 2. Wipe Firestore collection documents if network is online
+    if (navigator.onLine) {
+      for (const egg of defaultEggs) {
+        await setDoc(doc(db, 'eggs', egg.type), egg);
+      }
+
+      const customItemsSnap = await getDocs(collection(db, 'customItems'));
+      for (const d of customItemsSnap.docs) {
+        await deleteDoc(doc(db, 'customItems', d.id));
+      }
+
+      const customersSnap = await getDocs(collection(db, 'customers'));
+      for (const d of customersSnap.docs) {
+        await deleteDoc(doc(db, 'customers', d.id));
+      }
+
+      const txsSnap = await getDocs(collection(db, 'transactions'));
+      for (const d of txsSnap.docs) {
+        await deleteDoc(doc(db, 'transactions', d.id));
+      }
+    }
+    return true;
+  } catch (error) {
+    console.error('Failure during factory reset collection wipe:', error);
+    return false;
+  }
+};
+
