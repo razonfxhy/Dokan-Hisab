@@ -1,0 +1,29 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Egg category stock and configurations
+    match /eggs/{eggType} {
+      allow read, write: if true;
+    }
+
+    // Custom products and general stock items
+    match /customItems/{itemId} {
+      allow read, write: if true;
+    }
+
+    // Customers and dues records
+    match /customers/{customerId} {
+      allow read, write: if true;
+    }
+
+    // Sales transactions history list
+    match /transactions/{transactionId} {
+      allow read, write: if true;
+    }
+  }
+}

@@ -1,0 +1,49 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Hind+Siliguri:wght@300;400;500;600;700&display=swap');
+
+@theme {
+  --font-sans: "Hind Siliguri", "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  
+  --color-natural-bg: #FDFBF7;
+  --color-natural-text: #2D3319;
+  --color-natural-header: #F9F5EC;
+  --color-natural-border: #E9E2D0;
+  --color-natural-accent: #8B5E3C;
+  --color-natural-accent-hover: #754f30;
+  --color-natural-dark: #2D3319;
+  --color-natural-dark-hover: #1f2411;
+  --color-natural-light: #F5F1E9;
+}
+
+/* Custom visual polish */
+body {
+  background-color: #FDFBF7;
+  color: #2D3319;
+  font-family: var(--font-sans);
+}
+
+/* Custom scrollbar for modern cards */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #E9E2D0;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #CDA681;
+}
+
+/* Smooth custom eased spring */
+.spring-transition {
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+

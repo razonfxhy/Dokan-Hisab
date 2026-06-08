@@ -1,0 +1,77 @@
+{
+  "entities": {
+    "EggInventory": {
+      "title": "EggInventory",
+      "description": "Stock of egg category",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "description": "desi, broiler, duck, broken" },
+        "name": { "type": "string", "description": "Bengali name" },
+        "stock": { "type": "number" },
+        "unitPrice": { "type": "number" }
+      },
+      "required": ["type", "name", "stock", "unitPrice"]
+    },
+    "CustomItem": {
+      "title": "CustomItem",
+      "description": "Custom seasonal store item",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "stock": { "type": "number" },
+        "unit": { "type": "string" },
+        "unitPrice": { "type": "number" }
+      },
+      "required": ["id", "name", "stock", "unit", "unitPrice"]
+    },
+    "Customer": {
+      "title": "Customer",
+      "description": "Customer digital ledger account",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "dueAmount": { "type": "number" },
+        "additionalNotes": { "type": "string" }
+      },
+      "required": ["id", "name", "phone", "dueAmount"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Ledger double-entry logs",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string", "description": "sale, payment, stock_add" },
+        "date": { "type": "string", "format": "date-time" },
+        "totalAmount": { "type": "number" },
+        "paidAmount": { "type": "number" },
+        "dueAmount": { "type": "number" },
+        "customerId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "notes": { "type": "string" }
+      },
+      "required": ["id", "type", "date", "totalAmount", "paidAmount", "dueAmount"]
+    }
+  },
+  "firestore": {
+    "/eggs/{eggType}": {
+      "schema": "EggInventory",
+      "description": "Egg items inventories"
+    },
+    "/customItems/{itemId}": {
+      "schema": "CustomItem",
+      "description": "Custom seasonal items lists"
+    },
+    "/customers/{customerId}": {
+      "schema": "Customer",
+      "description": "Registered customer records"
+    },
+    "/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "Sales and payment transactions history"
+    }
+  }
+}

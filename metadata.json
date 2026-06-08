@@ -1,0 +1,6 @@
+{
+  "name": "সাব্বির পুষ্টি দোকান",
+  "description": "ডিম, মৌসুমী ফল এবং অন্যান্য পণ্যের স্টক, দৈনিক বিক্রি এবং ক্রেতাদের বাকির হিসাব রাখার জন্য একটি আধুনিক দোকান ব্যবস্থাপনা অ্যাপ।",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
