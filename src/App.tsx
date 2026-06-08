@@ -18,6 +18,7 @@ import {
   saveShopSettings
 } from './utils/storage';
 import { EggInventory, CustomItem, Customer, Transaction } from './types';
+import { getLang, setLang, translations, LangType } from './utils/lang';
 import Dashboard from './components/Dashboard';
 import NewSale from './components/NewSale';
 import Products from './components/Products';
@@ -45,6 +46,9 @@ export default function App() {
   // Navigation View Router
   const [activeView, setActiveView] = useState<'dashboard' | 'sale' | 'products' | 'customers' | 'transactions'>('dashboard');
 
+  // Language state selector
+  const [lang, setLangState] = useState<LangType>(() => getLang());
+
   // Load state from localStorage on startup
   const [eggs, setEggs] = useState<EggInventory[]>([]);
   const [customItems, setCustomItems] = useState<CustomItem[]>([]);
@@ -65,11 +69,14 @@ export default function App() {
     setTempShopAddress(shopSettings.address);
   }, [shopSettings]);
 
-  const formatDateBangla = (dateStr: string) => {
+  const formatDateByLang = (dateStr: string) => {
     if (!dateStr) return '';
     try {
       const parts = dateStr.split('-');
       if (parts.length === 3) {
+        if (lang === 'en') {
+          return `${parts[2]}/${parts[1]}/${parts[0]}`;
+        }
         const engDigits = '0123456789';
         const benDigits = '০১২৩৪৫৬৭৮৯';
         const formatted = `${parts[2]}-${parts[1]}-${parts[0]}`;
@@ -179,7 +186,7 @@ export default function App() {
   const handleUpdateEggStockOnly = (type: string, reduceQty: number) => {
     setEggs(prevEggs => {
       const updated = prevEggs.map(e => e.type === type ? { ...e, stock: Math.max(e.stock - reduceQty, 0) } : e);
-      saveEggInventory(updated);
+      setTimeout(() => saveEggInventory(updated), 0);
       return updated;
     });
   };
@@ -187,7 +194,7 @@ export default function App() {
   const handleUpdateCustomStockOnly = (id: string, reduceQty: number) => {
     setCustomItems(prevItems => {
       const updated = prevItems.map(item => item.id === id ? { ...item, stock: Math.max(item.stock - reduceQty, 0) } : item);
-      saveCustomItems(updated);
+      setTimeout(() => saveCustomItems(updated), 0);
       return updated;
     });
   };
@@ -195,7 +202,7 @@ export default function App() {
   const handleUpdateCustomerDueOnly = (id: string, dueDelta: number) => {
     setCustomers(prevCustomers => {
       const updated = prevCustomers.map(c => c.id === id ? { ...c, dueAmount: Math.max(c.dueAmount + dueDelta, 0) } : c);
-      saveCustomers(updated);
+      setTimeout(() => saveCustomers(updated), 0);
       return updated;
     });
   };
@@ -348,6 +355,8 @@ export default function App() {
     }
   };
 
+  const t = translations[lang];
+
   return (
     <div className="min-h-screen flex flex-col bg-natural-bg text-natural-text" id="app-root-container">
       
@@ -370,28 +379,42 @@ export default function App() {
                   type="button"
                   onClick={() => setShowShopSettingsModal(true)}
                   className="p-1 text-[#A69B84] hover:text-natural-accent hover:bg-natural-light/50 rounded transition active:scale-95 cursor-pointer"
-                  title="দোকানের নাম ও ঠিকানা পরিবর্তন"
+                  title={t.changeInfo}
                 >
                   <Settings className="w-3.5 h-3.5" />
+                </button>
+                
+                {/* Language quick indicator badge */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextLang: LangType = lang === 'bn' ? 'en' : 'bn';
+                    setLangState(nextLang);
+                    setLang(nextLang);
+                  }}
+                  className="bg-natural-light hover:bg-[#EAE4D2] text-[9.5px] text-natural-accent px-1.5 py-0.5 rounded-md border border-natural-border font-bold transition cursor-pointer active:scale-95"
+                  title="Switch Language"
+                >
+                  {lang === 'bn' ? 'English' : 'বাংলা'}
                 </button>
 
                 {/* Cloud Connection Badge */}
                 {cloudStatus === 'syncing' && (
                   <span className="inline-flex items-center gap-0.5 bg-[#FFFBEB] text-[#D97706] text-[9px] px-1.5 py-0.5 rounded-md border border-[#FCD34D] animate-pulse font-bold">
                     <CloudLightning className="w-2.5 h-2.5" />
-                    <span>সিঙ্ক হচ্ছে</span>
+                    <span>{t.cloudSyncing}</span>
                   </span>
                 )}
                 {cloudStatus === 'synced' && (
                   <span className="inline-flex items-center gap-0.5 bg-[#ECFDF5] text-[#059669] text-[9px] px-1.5 py-0.5 rounded-md border border-[#A7F3D0] font-bold">
                     <Cloud className="w-2.5 h-2.5" />
-                    <span>ক্লাউড সচল</span>
+                    <span>{t.cloudActive}</span>
                   </span>
                 )}
                 {cloudStatus === 'failed' && (
                   <span className="inline-flex items-center gap-0.5 bg-[#FEF2F2] text-[#DC2626] text-[9px] px-1.5 py-0.5 rounded-md border border-[#FCA5A5] font-bold">
                     <CloudOff className="w-2.5 h-2.5" />
-                    <span>লোকাল ড্রাইভ</span>
+                    <span>{t.localDrive}</span>
                   </span>
                 )}
               </div>
@@ -414,7 +437,7 @@ export default function App() {
               }`}
             >
               <LayoutDashboard className="w-4 h-4 shrink-0" />
-              <span>ড্যাশবোর্ড</span>
+              <span>{t.dashboard}</span>
             </button>
 
             <button
@@ -426,7 +449,7 @@ export default function App() {
               }`}
             >
               <ShoppingCart className="w-4 h-4 shrink-0" />
-              <span>নতুন বিক্রি</span>
+              <span>{t.newSale}</span>
             </button>
 
             <button
@@ -438,7 +461,7 @@ export default function App() {
               }`}
             >
               <Layers className="w-4 h-4 shrink-0" />
-              <span>পণ্য ও মজুদ</span>
+              <span>{t.products}</span>
             </button>
 
             <button
@@ -450,7 +473,7 @@ export default function App() {
               }`}
             >
               <Users className="w-4 h-4 shrink-0" />
-              <span>ক্রেতা তালিকা</span>
+              <span>{t.customers}</span>
             </button>
 
             <button
@@ -462,7 +485,7 @@ export default function App() {
               }`}
             >
               <FileText className="w-4 h-4 shrink-0" />
-              <span>লেনদেন জাবেদা</span>
+              <span>{t.transactions}</span>
             </button>
           </nav>
         </div>
@@ -474,15 +497,15 @@ export default function App() {
           <div className="flex items-center gap-2">
             <CalendarIcon className="w-4 h-4 text-natural-accent" />
             <span className="font-semibold text-natural-dark">
-              নির্দিষ্ট দিনের হিসাবপত্র ফিল্টার করুন:
+              {t.dateFilter}
             </span>
             {selectedDateFilter ? (
               <span className="bg-natural-accent text-[#FDFBF7] px-2.5 py-0.5 rounded-full font-bold">
-                {formatDateBangla(selectedDateFilter)} এর তথ্য প্রদর্শিত হচ্ছে
+                {formatDateByLang(selectedDateFilter)} {lang === 'en' ? 'view active' : 'এর তথ্য প্রদর্শিত হচ্ছে'}
               </span>
             ) : (
               <span className="bg-[#EAE4D2] text-[#2D3319] px-2.5 py-0.5 rounded-full font-bold">
-                আজকের দিনের চলমান হিসাব (কোনো নির্দিষ্ট ফিল্টার নেই)
+                {t.allTimeFilter}
               </span>
             )}
           </div>
@@ -498,7 +521,7 @@ export default function App() {
                 onClick={() => setSelectedDateFilter('')}
                 className="bg-red-50 hover:bg-red-150 text-red-700 font-bold px-2 py-1 rounded-lg border border-red-200 transition cursor-pointer active:scale-95 text-[10px]"
               >
-                ফিল্টার মুছুন
+                {t.clearFilter}
               </button>
             )}
           </div>
@@ -526,6 +549,7 @@ export default function App() {
               onFactoryReset={handleFactoryReset}
               selectedDateFilter={selectedDateFilter}
               shopSettings={shopSettings}
+              lang={lang}
             />
           )}
 
@@ -599,7 +623,7 @@ export default function App() {
         <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
           <div className="bg-natural-bg rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-natural-border space-y-4 text-left">
             <div className="flex justify-between items-center border-b border-natural-border/60 pb-3">
-              <h3 className="font-bold text-natural-dark text-lg text-[#8B5E3C]">দোকানের তথ্য পরিবর্তন করুন</h3>
+              <h3 className="font-bold text-natural-dark text-lg text-[#8B5E3C]">{t.changeInfo}</h3>
               <button 
                 onClick={() => setShowShopSettingsModal(false)}
                 className="text-natural-text/60 hover:text-natural-dark text-xl font-bold p-1 leading-none cursor-pointer"
@@ -611,20 +635,23 @@ export default function App() {
             <form 
               onSubmit={(e) => {
                 e.preventDefault();
-                const updatedSettings = { name: tempShopName.trim() || 'সাব্বির পুষ্টি দোকান', address: tempShopAddress.trim() || 'হাজীগঞ্জ বাজার, চাঁদপুর' };
+                const updatedSettings = { 
+                  name: tempShopName.trim() || (lang === 'en' ? 'Sabbir Nutrition Shop' : 'সাব্বির পুষ্টি দোকান'), 
+                  address: tempShopAddress.trim() || (lang === 'en' ? 'Hajiganj Bazar, Chandpur' : 'হাজীগঞ্জ বাজার, চাঁদপুর') 
+                };
                 setShopSettings(updatedSettings);
                 saveShopSettings(updatedSettings);
                 setShowShopSettingsModal(false);
-                alert('দোকানের নাম ও ঠিকানা সফলভাবে পরিবর্তন করা হয়েছে!');
+                alert(t.successMsg);
               }} 
               className="space-y-4"
             >
               <div className="space-y-1.5 text-left">
-                <label className="text-xs font-bold text-natural-dark">দোকানের নাম *</label>
+                <label className="text-xs font-bold text-natural-dark">{t.shopName}</label>
                 <input
                   type="text"
                   required
-                  placeholder="যেমন: সাব্বির পুষ্টি দোকান"
+                  placeholder={lang === 'en' ? 'e.g., Sabbir Nutrition Shop' : 'যেমন: সাব্বির পুষ্টি দোকান'}
                   value={tempShopName}
                   onChange={(e) => setTempShopName(e.target.value)}
                   className="w-full bg-[#FDFBF7] border border-natural-border rounded-lg p-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-natural-accent text-natural-dark font-medium"
@@ -632,15 +659,52 @@ export default function App() {
               </div>
 
               <div className="space-y-1.5 text-left">
-                <label className="text-xs font-bold text-natural-dark">ঠিকানা / মোবাইল / বিবরণ *</label>
+                <label className="text-xs font-bold text-natural-dark">{t.shopAddress}</label>
                 <input
                   type="text"
                   required
-                  placeholder="যেমন: হাজীগঞ্জ বাজার, চাঁদপুর"
+                  placeholder={lang === 'en' ? 'e.g., Hajiganj Bazar, Chandpur' : 'যেমন: হাজীগঞ্জ বাজার, চাঁদপুর'}
                   value={tempShopAddress}
                   onChange={(e) => setTempShopAddress(e.target.value)}
                   className="w-full bg-[#FDFBF7] border border-natural-border rounded-lg p-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-natural-accent text-natural-dark font-medium"
                 />
+              </div>
+
+              {/* Language Settings Control Block */}
+              <div className="space-y-1.5 text-left border-t border-natural-border/50 pt-3">
+                <label className="text-xs font-bold text-natural-dark block mb-1">
+                  {t.languageLabel}
+                </label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLangState('bn');
+                      setLang('bn');
+                    }}
+                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1 py-2 cursor-pointer ${
+                      lang === 'bn'
+                        ? 'bg-natural-accent text-white shadow-xs'
+                        : 'bg-[#FDFBF7] border border-natural-border text-natural-text hover:bg-[#EAE4D2]'
+                    }`}
+                  >
+                    <span>🇧🇩</span> {t.bengali}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLangState('en');
+                      setLang('en');
+                    }}
+                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1 py-2 cursor-pointer ${
+                      lang === 'en'
+                        ? 'bg-natural-accent text-white shadow-xs'
+                        : 'bg-[#FDFBF7] border border-natural-border text-natural-text hover:bg-[#EAE4D2]'
+                    }`}
+                  >
+                    <span>🇺🇸</span> {t.english}
+                  </button>
+                </div>
               </div>
 
               <div className="flex gap-2 pt-2">
@@ -649,13 +713,13 @@ export default function App() {
                   onClick={() => setShowShopSettingsModal(false)}
                   className="w-1/2 bg-natural-light hover:bg-[#EAE4D2] text-[#2D3319] font-bold py-2.5 rounded-xl text-sm cursor-pointer"
                 >
-                  বাতিল করুন
+                  {t.cancel}
                 </button>
                 <button
                   type="submit"
                   className="w-1/2 bg-natural-accent hover:bg-natural-accent-hover text-white font-bold py-2.5 rounded-xl text-sm cursor-pointer"
                 >
-                  সংরক্ষণ করুন
+                  {t.save}
                 </button>
               </div>
             </form>

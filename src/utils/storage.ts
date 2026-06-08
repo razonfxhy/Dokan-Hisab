@@ -29,6 +29,27 @@ interface PendingSync {
   transactions: { [id: string]: Transaction | 'delete' };
 }
 
+// Helper to sanitize any undefined values before sending to Firestore to prevent crashes
+export function cleanUndefined<T>(obj: T): T {
+  if (obj === null || obj === undefined) return obj;
+  if (typeof obj !== 'object') return obj;
+  
+  if (Array.isArray(obj)) {
+    return obj.map(item => cleanUndefined(item)) as unknown as T;
+  }
+  
+  const clean: any = {};
+  for (const key in obj) {
+    if (Object.prototype.hasOwnProperty.call(obj, key)) {
+      const val = (obj as any)[key];
+      if (val !== undefined && val !== null) {
+        clean[key] = cleanUndefined(val);
+      }
+    }
+  }
+  return clean as T;
+}
+
 // Self-Executing Local Purge Block
 // Removes leftover mock/seed database representations to transition to pristine states safely.
 (() => {
@@ -126,10 +147,16 @@ export const saveEggInventory = (eggs: EggInventory[]): void => {
   localStorage.setItem(EGGS_KEY, JSON.stringify(eggs));
   if (navigator.onLine) {
     eggs.forEach(egg => {
-      setDoc(doc(db, 'eggs', egg.type), egg).catch(err => {
-        console.warn('Egg cloud save failed - queued for offline:', err);
+      try {
+        const cleaned = cleanUndefined(egg);
+        setDoc(doc(db, 'eggs', egg.type), cleaned).catch(err => {
+          console.warn('Egg cloud save failed - queued for offline:', err);
+          markEggUnsynced();
+        });
+      } catch (err) {
+        console.warn('Failed process synchronous during egg cloud set:', err);
         markEggUnsynced();
-      });
+      }
     });
   } else {
     markEggUnsynced();
@@ -148,12 +175,18 @@ export const getCustomItems = (): CustomItem[] => {
 export const saveCustomItems = (items: CustomItem[]): void => {
   localStorage.setItem(CUSTOM_ITEMS_KEY, JSON.stringify(items));
   items.forEach(item => {
-    if (navigator.onLine) {
-      setDoc(doc(db, 'customItems', item.id), item).catch(err => {
-        console.warn('Custom item cloud save failed - queued for offline:', err);
+    try {
+      if (navigator.onLine) {
+        const cleaned = cleanUndefined(item);
+        setDoc(doc(db, 'customItems', item.id), cleaned).catch(err => {
+          console.warn('Custom item cloud save failed - queued for offline:', err);
+          markCustomItemUnsynced(item.id, item);
+        });
+      } else {
         markCustomItemUnsynced(item.id, item);
-      });
-    } else {
+      }
+    } catch (err) {
+      console.warn('Failed process synchronous during custom item cloud set:', err);
       markCustomItemUnsynced(item.id, item);
     }
   });
@@ -171,12 +204,18 @@ export const getCustomers = (): Customer[] => {
 export const saveCustomers = (customers: Customer[]): void => {
   localStorage.setItem(CUSTOMERS_KEY, JSON.stringify(customers));
   customers.forEach(cust => {
-    if (navigator.onLine) {
-      setDoc(doc(db, 'customers', cust.id), cust).catch(err => {
-        console.warn('Customer cloud save failed - queued for offline:', err);
+    try {
+      if (navigator.onLine) {
+        const cleaned = cleanUndefined(cust);
+        setDoc(doc(db, 'customers', cust.id), cleaned).catch(err => {
+          console.warn('Customer cloud save failed - queued for offline:', err);
+          markCustomerUnsynced(cust.id, cust);
+        });
+      } else {
         markCustomerUnsynced(cust.id, cust);
-      });
-    } else {
+      }
+    } catch (err) {
+      console.warn('Failed process synchronous during customer cloud set:', err);
       markCustomerUnsynced(cust.id, cust);
     }
   });
@@ -194,12 +233,18 @@ export const getTransactions = (): Transaction[] => {
 export const saveTransactions = (transactions: Transaction[]): void => {
   localStorage.setItem(TRANSACTIONS_KEY, JSON.stringify(transactions));
   transactions.forEach(tx => {
-    if (navigator.onLine) {
-      setDoc(doc(db, 'transactions', tx.id), tx).catch(err => {
-        console.warn('Transaction cloud save failed - queued for offline:', err);
+    try {
+      if (navigator.onLine) {
+        const cleaned = cleanUndefined(tx);
+        setDoc(doc(db, 'transactions', tx.id), cleaned).catch(err => {
+          console.warn('Transaction cloud save failed - queued for offline:', err);
+          markTransactionUnsynced(tx.id, tx);
+        });
+      } else {
         markTransactionUnsynced(tx.id, tx);
-      });
-    } else {
+      }
+    } catch (err) {
+      console.warn('Failed process synchronous during transaction cloud set:', err);
       markTransactionUnsynced(tx.id, tx);
     }
   });
@@ -251,7 +296,7 @@ export const pushPendingDataToCloud = async (): Promise<boolean> => {
     if (sync.eggs) {
       const eggs = getEggInventory();
       for (const egg of eggs) {
-        await setDoc(doc(db, 'eggs', egg.type), egg);
+        await setDoc(doc(db, 'eggs', egg.type), cleanUndefined(egg));
       }
       sync.eggs = false;
       hasTransfers = true;
@@ -262,7 +307,7 @@ export const pushPendingDataToCloud = async (): Promise<boolean> => {
       if (value === 'delete') {
         await deleteDoc(doc(db, 'customItems', id));
       } else {
-        await setDoc(doc(db, 'customItems', id), value);
+        await setDoc(doc(db, 'customItems', id), cleanUndefined(value));
       }
       delete sync.customItems[id];
       hasTransfers = true;
@@ -273,7 +318,7 @@ export const pushPendingDataToCloud = async (): Promise<boolean> => {
       if (value === 'delete') {
         await deleteDoc(doc(db, 'customers', id));
       } else {
-        await setDoc(doc(db, 'customers', id), value);
+        await setDoc(doc(db, 'customers', id), cleanUndefined(value));
       }
       delete sync.customers[id];
       hasTransfers = true;
@@ -284,7 +329,7 @@ export const pushPendingDataToCloud = async (): Promise<boolean> => {
       if (value === 'delete') {
         await deleteDoc(doc(db, 'transactions', id));
       } else {
-        await setDoc(doc(db, 'transactions', id), value);
+        await setDoc(doc(db, 'transactions', id), cleanUndefined(value));
       }
       delete sync.transactions[id];
       hasTransfers = true;
@@ -310,7 +355,7 @@ export const syncAllDataWithCloud = async () => {
     if (eggsSnapshot.empty) {
       // Seed Cloud with zero elements
       for (const e of defaultEggs) {
-        await setDoc(doc(db, 'eggs', e.type), e);
+        await setDoc(doc(db, 'eggs', e.type), cleanUndefined(e));
       }
       syncedEggs = defaultEggs;
     } else {
@@ -328,7 +373,7 @@ export const syncAllDataWithCloud = async () => {
       if (hasOldMockEggStock) {
         syncedEggs = defaultEggs;
         for (const e of defaultEggs) {
-          await setDoc(doc(db, 'eggs', e.type), e);
+          await setDoc(doc(db, 'eggs', e.type), cleanUndefined(e));
         }
       }
     }
@@ -379,16 +424,6 @@ export const syncAllDataWithCloud = async () => {
       syncedTx.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }
     localStorage.setItem(TRANSACTIONS_KEY, JSON.stringify(syncedTx));
-
-    // Heuristic: If there are absolutely zero receipts recorded, any positive egg stock must be residual mockup data.
-    // Force reset all egg stock to zero to guarantee zero-defaults on clean runs.
-    if (syncedTx.length === 0) {
-      syncedEggs = defaultEggs;
-      for (const e of defaultEggs) {
-        await setDoc(doc(db, 'eggs', e.type), e);
-      }
-      localStorage.setItem(EGGS_KEY, JSON.stringify(syncedEggs));
-    }
 
     return {
       eggs: syncedEggs,

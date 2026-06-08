@@ -24,6 +24,7 @@ interface DashboardProps {
   onFactoryReset: () => Promise<void>;
   selectedDateFilter?: string;
   shopSettings?: { name: string; address: string };
+  lang?: 'bn' | 'en';
 }
 
 export default function Dashboard({ 
@@ -35,7 +36,8 @@ export default function Dashboard({
   onViewTransaction,
   onFactoryReset,
   selectedDateFilter = '',
-  shopSettings = { name: 'সাব্বির পুষ্টি দোকান', address: 'হাজীগঞ্জ বাজার, চাঁদপুর' }
+  shopSettings = { name: 'সাব্বির পুষ্টি দোকান', address: 'হাজীগঞ্জ বাজার, চাঁদপুর' },
+  lang = 'bn'
 }: DashboardProps) {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
@@ -67,10 +69,12 @@ export default function Dashboard({
     .slice(0, 5);
 
   const formatPrice = (price: number) => {
+    if (lang === 'en') return `৳${price.toLocaleString('en-US')}`;
     return `৳${price.toLocaleString('bn-BD')}`;
   };
 
   const formatNumberBengali = (num: number) => {
+    if (lang === 'en') return num.toLocaleString('en-US');
     return num.toLocaleString('bn-BD');
   };  const getEggColor = (type: string) => {
     switch (type) {
