@@ -10,7 +10,8 @@ import {
   saveTransactions,
   syncAllDataWithCloud,
   deleteCustomerFromCloud,
-  deleteCustomItemFromCloud
+  deleteCustomItemFromCloud,
+  deleteTransactionFromCloud
 } from './utils/storage';
 import { EggInventory, CustomItem, Customer, Transaction } from './types';
 import Dashboard from './components/Dashboard';
@@ -145,6 +146,99 @@ export default function App() {
   const handleAddTransaction = (newTx: Transaction) => {
     const updated = [newTx, ...transactions];
     updateTransactionsState(updated);
+  };
+
+  const handleDeleteTransaction = (id: string) => {
+    const tx = transactions.find(t => t.id === id);
+    if (!tx) return;
+
+    // 1. Delete transaction
+    const newTxList = transactions.filter(t => t.id !== id);
+    updateTransactionsState(newTxList);
+    deleteTransactionFromCloud(id);
+
+    // 2. Adjust customer due balance
+    if (tx.customerId) {
+      const dueDelta = tx.type === 'sale' ? -tx.dueAmount : tx.paidAmount;
+      const updatedCustomers = customers.map(c => 
+        c.id === tx.customerId ? { ...c, dueAmount: Math.max(0, c.dueAmount + dueDelta) } : c
+      );
+      updateCustomersState(updatedCustomers);
+    }
+
+    // 3. Adjust inventory stock
+    if (tx.items && tx.items.length > 0) {
+      const isSale = tx.type === 'sale';
+      const isStockAdd = tx.type === 'stock_add';
+
+      if (isSale) {
+        // Put stock back
+        let updatedEggs = [...eggs];
+        let updatedCustom = [...customItems];
+        tx.items.forEach(item => {
+          if (item.type === 'egg') {
+            updatedEggs = updatedEggs.map(e => e.type === item.itemId ? { ...e, stock: e.stock + item.quantity } : e);
+          } else {
+            updatedCustom = updatedCustom.map(c => c.id === item.itemId ? { ...c, stock: c.stock + item.quantity } : c);
+          }
+        });
+        updateEggsState(updatedEggs);
+        updateCustomItemsState(updatedCustom);
+      } else if (isStockAdd) {
+        // Pull stock out
+        let updatedEggs = [...eggs];
+        let updatedCustom = [...customItems];
+        tx.items.forEach(item => {
+          if (item.type === 'egg') {
+            updatedEggs = updatedEggs.map(e => e.type === item.itemId ? { ...e, stock: Math.max(0, e.stock - item.quantity) } : e);
+          } else {
+            updatedCustom = updatedCustom.map(c => c.id === item.itemId ? { ...c, stock: Math.max(0, c.stock - item.quantity) } : c);
+          }
+        });
+        updateEggsState(updatedEggs);
+        updateCustomItemsState(updatedCustom);
+      }
+    }
+
+    if (selectedTransaction?.id === id) {
+      setSelectedTransaction(null);
+    }
+  };
+
+  const handleEditTransaction = (oldTx: Transaction, updatedTx: Transaction) => {
+    // 1. Update the transaction itself
+    const newTxList = transactions.map(t => t.id === oldTx.id ? { ...t, ...updatedTx } : t);
+    updateTransactionsState(newTxList);
+
+    // 2. Adjust customer due balances
+    if (oldTx.customerId === updatedTx.customerId) {
+      if (oldTx.customerId) {
+        const netDueDelta = updatedTx.dueAmount - oldTx.dueAmount;
+        const updatedCustomers = customers.map(c => 
+          c.id === oldTx.customerId ? { ...c, dueAmount: Math.max(0, c.dueAmount + netDueDelta) } : c
+        );
+        updateCustomersState(updatedCustomers);
+      }
+    } else {
+      let updatedCustomers = [...customers];
+      if (oldTx.customerId) {
+        // Remove old transaction's effect from old customer
+        updatedCustomers = updatedCustomers.map(c => 
+          c.id === oldTx.customerId ? { ...c, dueAmount: Math.max(0, c.dueAmount - oldTx.dueAmount) } : c
+        );
+      }
+      if (updatedTx.customerId) {
+        // Add new transaction's effect to new customer
+        updatedCustomers = updatedCustomers.map(c => 
+          c.id === updatedTx.customerId ? { ...c, dueAmount: Math.max(0, c.dueAmount + updatedTx.dueAmount) } : c
+        );
+      }
+      updateCustomersState(updatedCustomers);
+    }
+
+    if (selectedTransaction?.id === oldTx.id) {
+      setSelectedTransaction({ ...selectedTransaction, ...updatedTx });
+    }
   };
 
   const handleViewTransactionReceipt = (tx: Transaction | null) => {
@@ -322,6 +416,9 @@ export default function App() {
             transactions={transactions}
             onViewTransaction={handleViewTransactionReceipt}
             selectedTransaction={selectedTransaction}
+            onDeleteTransaction={handleDeleteTransaction}
+            onEditTransaction={handleEditTransaction}
+            customers={customers}
           />
         )}
       </main>

@@ -199,6 +199,10 @@ export const deleteCustomerFromCloud = (id: string) => {
   deleteDoc(doc(db, 'customers', id)).catch(err => console.warn('Cloud delete failed for customer:', err));
 };
 
+export const deleteTransactionFromCloud = (id: string) => {
+  deleteDoc(doc(db, 'transactions', id)).catch(err => console.warn('Cloud delete failed for transaction:', err));
+};
+
 // FULL Cloud sync task. Synchronizes with firestore and returns updated data
 export const syncAllDataWithCloud = async () => {
   try {
